@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Secrets — never commit
+.env
+.env.local
+
+# Local state
+data/qdrant/
+data/workspaces/
+data/target/
+*.sqlite
+*.db
+
+# IMPORTANT: data/fixtures/ is deliberately NOT ignored.
+# The recorded API/LLM responses are what make the offline demo reproducible on
+# a fresh clone with no API keys. They are scrubbed of secrets on write — see
+# src/forge/cache/fixtures.py.

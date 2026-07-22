@@ -1,0 +1,77 @@
+[project]
+name = "forge"
+version = "0.1.0"
+description = "Multi-agent engineering assistant: grounded code RAG, planned patches, sandbox-verified tests."
+readme = "README.md"
+# Pinned to 3.12: the ML stack (torch / sentence-transformers) still lags on 3.13+.
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    # --- orchestration ---
+    "langgraph>=1.2",
+    "langgraph-checkpoint-sqlite>=2.0",
+    "langchain>=1.0",
+    "langchain-core>=1.0",
+    # --- LLM providers (swappable via LLM_PROVIDER in .env) ---
+    "langchain-google-genai>=2.1",
+    "langchain-groq>=0.3",
+    "langchain-ollama>=0.3",
+    # --- retrieval ---
+    "qdrant-client>=1.12",
+    "sentence-transformers>=3.3",
+    "bm25s>=0.2",
+    "PyStemmer>=2.2",
+    # --- AST-aware chunking (cahier 6.2) ---
+    "tree-sitter>=0.23",
+    "tree-sitter-python>=0.23",
+    # --- sandbox executor (cahier 8.3) ---
+    "docker>=7.1",
+    # --- services ---
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sse-starlette>=2.1",
+    # --- CLI (cahier 10.2) ---
+    "typer>=0.15",
+    "rich>=13.9",
+    # --- plumbing ---
+    "httpx>=0.28",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Web UI. Kept separate until docs/descope-v1.md §2 is resolved (Streamlit vs React):
+# if React wins, this extra is dropped and `web/` becomes a separate build.
+ui = [
+    "streamlit>=1.41",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+]
+
+[project.scripts]
+forge = "forge.cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+asyncio_mode = "auto"
+# Tests never reach the network — tests/conftest.py forces CACHE_MODE=replay.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
