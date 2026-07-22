@@ -25,10 +25,33 @@ def test_config_reports_the_reranker_as_off():
 
 def test_unimplemented_commands_exit_nonzero_and_say_when():
     """A stub that exits 0 would let a broken pipeline look green in CI."""
-    for command, args in [("index", ["."]), ("ask", ["q"]), ("fix", ["r"])]:
+    for command, args in [("ask", ["q"]), ("fix", ["r"])]:
         result = runner.invoke(app, [command, *args])
         assert result.exit_code != 0, f"`forge {command}` must not report success"
         assert "not implemented yet" in result.stdout
+
+
+def test_index_reports_what_it_indexed(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "app.py").write_text("def hello():\n    return 1\n")
+
+    result = runner.invoke(app, ["index", str(repo)])
+
+    assert result.exit_code == 0, result.stdout
+    # Rich wraps to the console width, so compare on normalised whitespace.
+    output = " ".join(result.stdout.split())
+    assert "full index" in output
+    assert "chunks from 1 files" in output
+
+
+def test_index_rejects_a_path_that_is_not_a_directory(tmp_path):
+    missing = tmp_path / "nope"
+
+    result = runner.invoke(app, ["index", str(missing)])
+
+    assert result.exit_code == 1
+    assert "Not a directory" in result.stdout
 
 
 def test_bare_invocation_shows_help():

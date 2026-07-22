@@ -7,6 +7,8 @@ option. Commands are stubbed here and filled in as their subsystems land.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -52,9 +54,23 @@ def config() -> None:
 
 
 @app.command()
-def index(path: str = typer.Argument(..., help="Repository to ingest.")) -> None:
-    """Ingest and index a repository (cahier 6.1). Lands D2."""
-    raise typer.Exit(_todo("index", "D2 — ingestion and AST-aware chunking"))
+def index(
+    path: Path = typer.Argument(..., help="Repository to ingest."),
+    full: bool = typer.Option(False, "--full", help="Rebuild instead of reindexing the git diff."),
+) -> None:
+    """Ingest and index a repository (cahier 6.1)."""
+    from forge.rag.ingest import index_repo
+
+    if not path.is_dir():
+        console.print(f"[red]Not a directory:[/] {path}")
+        raise typer.Exit(1)
+
+    with console.status(f"Indexing {path}..."):
+        report = index_repo(path, full=full)
+
+    console.print(f"[green]{report.summary()}[/]")
+    if report.deleted:
+        console.print(f"  replaced chunks from {report.deleted} changed file(s)")
 
 
 @app.command()

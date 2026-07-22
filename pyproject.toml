@@ -93,3 +93,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Typer's documented idiom is a call in the parameter default; these are
+# declarations, not the mutable-default footgun B008 exists to catch.
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
