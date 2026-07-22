@@ -19,6 +19,10 @@ dependencies = [
     # --- retrieval ---
     "qdrant-client>=1.12",
     "sentence-transformers>=3.3",
+    # Declared explicitly, though sentence-transformers already pulls it, so the
+    # CPU index pin below actually binds — tool.uv.sources only applies to direct
+    # dependencies, not transitive ones.
+    "torch>=2.6",
     "bm25s>=0.2",
     "PyStemmer>=2.2",
     # --- AST-aware chunking (cahier 6.2) ---
@@ -55,6 +59,20 @@ dev = [
 
 [project.scripts]
 forge = "forge.cli.main:app"
+
+# sentence-transformers pulls torch, and torch's default Linux wheel bundles the
+# whole CUDA runtime — 2.7 GB of NVIDIA libraries plus a 1.1 GB torch. This
+# machine has no NVIDIA driver (Intel UHD only) and neither does the examiner's
+# laptop, so none of it can ever execute. Pinning the CPU index took the image
+# from 11.1 GB to something a clean-machine `docker compose up` can survive,
+# which is acceptance criterion C9.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
 
 [build-system]
 requires = ["hatchling"]

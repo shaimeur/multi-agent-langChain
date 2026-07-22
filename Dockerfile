@@ -27,7 +27,11 @@ COPY data/fixtures/ data/fixtures/
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-RUN useradd --create-home --uid 1000 app && chown -R app:app /app /opt/hf
+# HF_HOME only names the path; the directory has to exist before it can be
+# chowned, and the compose volume that later mounts over it is a runtime thing.
+RUN mkdir -p /opt/hf \
+    && useradd --create-home --uid 1000 app \
+    && chown -R app:app /app /opt/hf
 USER app
 
 EXPOSE 8000 8501

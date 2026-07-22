@@ -32,6 +32,32 @@ And the cost shape of the design itself:
 These three — RAM, no GPU, call volume — are what the cahier does not survive contact with.
 Nothing else in it is in question.
 
+### Measured on D2, after the stack came up
+
+The RAM estimates above were the pessimistic case. Actuals, `docker compose up`, idle:
+
+| Service | Feared | Measured (idle) |
+|---|---|---|
+| `qdrant` | 300 MB – 1 GB | **20 MB** |
+| `api` | ~500 MB | **41 MB** |
+
+So the four-service topology has far more headroom than §5 assumed. Two caveats keep the descope
+standing rather than reversing it:
+
+1. **Idle is not loaded.** BGE-M3 in the API process adds ~2.5 GB resident once retrieval lands, and
+   Qdrant grows with the indexed corpus. The measured figure is a floor, not a ceiling.
+2. **Quota, not RAM, is the binding constraint.** The ~29 calls / ~300k tokens per run limits
+   iteration speed regardless of how much memory is free — so §7's benchmark cuts stand on their own
+   reasoning and are not affected by this measurement.
+
+What this *does* soften: the case for dropping `postgres` (§1) rested partly on RAM and partly on
+scope. The scope argument is the load-bearing one and is unaffected. Keep SQLite.
+
+One thing this measurement caught that nearly shipped: the API image built at **11.1 GB**, because
+torch's default Linux wheel bundles the CUDA runtime — 2.7 GB of NVIDIA libraries that cannot
+execute on Intel UHD. Pinning the CPU wheel index took it to **3.08 GB** and the venv from 5.0 GB to
+1.2 GB. That would have surfaced on the D14 clean-machine test with no time to fix it.
+
 ---
 
 ## 1. Memory — §7
