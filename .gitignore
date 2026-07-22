@@ -24,3 +24,7 @@ data/target/
 # The recorded API/LLM responses are what make the offline demo reproducible on
 # a fresh clone with no API keys. They are scrubbed of secrets on write — see
 # src/forge/cache/fixtures.py.
+
+# Index manifests: machine-local state (absolute paths, BM25 corpus statistics,
+# the sha last indexed). Rebuilt by `forge index`, never shared.
+data/*-index-manifest.json

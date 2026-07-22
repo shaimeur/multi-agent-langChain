@@ -80,7 +80,12 @@ class Settings(BaseSettings):
     ollama_coder_model: str = "qwen2.5-coder:7b"
 
     # --- retrieval ------------------------------------------------------
-    embedding_model: str = "BAAI/bge-m3"
+    # Provisional, chosen on measured CPU throughput: BGE-M3 costs 1709 ms/chunk
+    # here against this model's 47 ms — 36x, which makes a full reindex a coffee
+    # break and breaks the 2-second incremental-reindex demo in cahier §14/J2.
+    # Retrieval quality has NOT been compared yet; D4's ablation decides, and may
+    # well buy BGE-M3 back. See docs/evaluation.md.
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     # Server mode when set (the compose default), embedded local mode otherwise.
     # The escape hatch matters: embedded Qdrant frees ~300 MB-1 GB of RAM on a
     # machine that only has ~5 GB to give.
