@@ -11,6 +11,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from forge.config import LLMRole, get_settings
@@ -123,9 +124,44 @@ def search(
 
 
 @app.command()
-def ask(question: str = typer.Argument(..., help="Question about the codebase.")) -> None:
-    """Grounded question against the indexed codebase (cahier 6.6). Lands D5."""
-    raise typer.Exit(_todo("ask", "D5 — grounded generation on the LangGraph skeleton"))
+def ask(
+    question: str = typer.Argument(..., help="Question about the codebase."),
+    k: int = typer.Option(8, "--k", help="How many snippets to ground the answer in."),
+) -> None:
+    """Grounded answer with verified citations (cahier 6.6).
+
+    Direct RAG — retrieve, answer from the snippets, then verify every citation in
+    code against what was retrieved. Not the full agent graph (that is D5-D9); the
+    smallest thing that is a usable service. Needs an LLM: local Ollama by default
+    (see .env.local.example), or a provider key.
+    """
+    from forge.rag.answer import answer_question
+
+    with console.status("Retrieving and answering..."):
+        result = answer_question(question, k=k)
+
+    badge = "[green]● grounded[/]" if result.grounded else "[yellow]○ ungrounded[/]"
+    console.print()
+    console.print(Panel(result.answer, title=f"forge ask · {badge}", border_style="cyan"))
+
+    if result.citations:
+        symbols = {s.chunk_id: s.symbol for s in result.sources}
+        table = Table(
+            title="citations · verified against the retrieved context", header_style="bold"
+        )
+        table.add_column("location")
+        table.add_column("symbol")
+        for citation in result.citations:
+            table.add_row(
+                f"{citation.path}:{citation.start_line}-{citation.end_line}",
+                symbols.get(citation.chunk_id) or "—",
+            )
+        console.print(table)
+    elif result.sources:
+        console.print(
+            "[yellow]No verified citation.[/] The model did not ground its answer in the "
+            f"{len(result.sources)} retrieved snippet(s) — treat the answer with suspicion."
+        )
 
 
 @app.command()

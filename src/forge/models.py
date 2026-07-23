@@ -137,3 +137,38 @@ class SearchHit(BaseModel):
     def provenance(self) -> str:
         """``dense+sparse`` — the retrievers that found this, for the table."""
         return "+".join(r.value for r in self.retrievers)
+
+
+class SourceRef(BaseModel):
+    """A retrieved snippet offered to the answerer, in rank order.
+
+    What the UI shows as "sources" and what a citation points into. Lighter than a
+    full ``Chunk`` — it carries only what a human needs to open the file.
+    """
+
+    chunk_id: str
+    path: str
+    start_line: int
+    end_line: int
+    symbol: str | None = None
+
+    @property
+    def citation(self) -> str:
+        return f"{self.path}:{self.start_line}-{self.end_line}"
+
+
+class GroundedAnswer(BaseModel):
+    """The output of the grounded-Q&A path (cahier §6.6).
+
+    An answer whose every citation has been checked *in code* against the snippets
+    that were actually retrieved (`ContextPack.supports`, §8.4) — never on the
+    model's say-so. ``grounded`` is False when the model cited nothing verifiable,
+    which is the honest signal that the answer is unsupported rather than a silent
+    hallucination.
+    """
+
+    question: str
+    answer: str
+    grounded: bool = False
+    citations: list[Citation] = Field(default_factory=list)
+    sources: list[SourceRef] = Field(default_factory=list)

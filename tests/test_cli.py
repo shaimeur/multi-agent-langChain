@@ -25,10 +25,19 @@ def test_config_reports_the_reranker_as_off():
 
 def test_unimplemented_commands_exit_nonzero_and_say_when():
     """A stub that exits 0 would let a broken pipeline look green in CI."""
-    for command, args in [("ask", ["q"]), ("fix", ["r"])]:
+    for command, args in [("fix", ["r"])]:
         result = runner.invoke(app, [command, *args])
         assert result.exit_code != 0, f"`forge {command}` must not report success"
         assert "not implemented yet" in result.stdout
+
+
+def test_ask_is_wired_and_handles_an_unindexed_repo():
+    """`forge ask` is implemented now; with nothing indexed it answers honestly
+    and never reaches the LLM (the conftest index is empty)."""
+    result = runner.invoke(app, ["ask", "where is anything handled"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "index" in result.stdout.lower()
 
 
 def test_index_reports_what_it_indexed(tmp_path):

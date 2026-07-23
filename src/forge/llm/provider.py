@@ -42,12 +42,15 @@ def build_llm(
     role: LLMRole,
     *,
     temperature: float = 0.0,
+    num_ctx: int | None = None,
     settings: Settings | None = None,
 ) -> BaseChatModel:
     """Return the chat model configured for ``role`` under the active provider.
 
     Imports are deferred per provider so that an SDK for a provider you are not
-    using never has to be importable.
+    using never has to be importable. ``num_ctx`` sizes Ollama's context window —
+    it defaults to 2048 there, which silently truncates a code ContextPack; the
+    hosted providers ignore it (their context is fixed by the model).
     """
     settings = settings or get_settings()
     _install_cache()
@@ -77,11 +80,13 @@ def build_llm(
         case LLMProvider.OLLAMA:
             from langchain_ollama import ChatOllama
 
+            extra = {"num_ctx": num_ctx} if num_ctx is not None else {}
             return ChatOllama(
                 model=model,
                 base_url=settings.ollama_base_url,
                 temperature=temperature,
                 cache=True,
+                **extra,
             )
 
     raise ValueError(f"Unknown provider: {settings.llm_provider}")

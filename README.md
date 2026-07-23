@@ -14,7 +14,8 @@ Scope decisions: [`docs/descope-v1.md`](docs/descope-v1.md)
 
 ## Status
 
-Day 2 of 15. Foundations only — the graph, RAG and sandbox land over the coming sprints.
+Day 3 of 15. Ingestion, hybrid retrieval, and a **runnable grounded-RAG service** (`forge ask` /
+`POST /v1/ask`) work today. The multi-agent graph, sandbox and web UI land over the coming sprints.
 
 | Sprint | Days | Delivers | State |
 |---|---|---|---|
@@ -24,25 +25,41 @@ Day 2 of 15. Foundations only — the graph, RAG and sandbox land over the comin
 | 4 — Interfaces | D12–D13 | FastAPI + SSE, `forge` CLI, web UI | planned |
 | 5 — Integration | D14–D15 | Compose, benchmark, docs, defense | planned |
 
-What works today: configuration, the record/replay fixture layer, the multi-provider LLM factory,
-the health probe, and the CLI skeleton. 22 tests green.
+What works today: AST-aware ingestion, hybrid retrieval (dense + sparse + ripgrep, RRF-fused) with
+`file:line` citations, and a grounded question-answering service whose every citation is verified in
+code against what was retrieved. Plus the record/replay fixture layer, the multi-provider LLM
+factory, and the health/search/ask API. **100 tests green.**
 
 ## Quickstart
 
+Runs locally with **no cloud API key** — it answers with the Ollama model on your machine.
+
 ```bash
-cp .env.example .env      # works unedited — the demo path needs no API keys
 make install
-make test
+cp .env.local.example .env      # local profile: Ollama (mistral), embedded Qdrant
+ollama pull mistral             # if you don't have it already
+make test                       # 100 tests, fully offline
 ```
 
-Run the API and the CLI:
+Index a repository, then search and ask it questions — grounded, with citations:
 
 ```bash
-make api                  # http://localhost:8000/docs
-uv run forge config       # show resolved settings and model routing
+uv run forge index data/target                          # ingest (sqlparse, ADR-003)
+uv run forge search "how are SQL comments stripped"     # hybrid retrieval → path:line
+uv run forge ask "how does sqlparse split statements?"  # grounded answer + verified citations
 ```
 
-Full stack:
+Or over HTTP:
+
+```bash
+make api                                                # http://localhost:8000/docs
+curl -sX POST localhost:8000/v1/ask \
+     -H 'content-type: application/json' \
+     -d '{"question":"how are statements split?"}' | jq
+```
+
+To use a hosted model instead, set `LLM_PROVIDER=gemini` and `GOOGLE_API_KEY` in `.env`. Full stack
+under Docker:
 
 ```bash
 docker compose up                      # qdrant + api
@@ -100,11 +117,11 @@ src/forge/
 ├── cache/           record/replay fixture store
 ├── llm/             provider-agnostic chat model factory
 ├── core/            LangGraph state, agents, the graph        (D5-D9)
-├── rag/             ingest, AST chunking, embed, retrieve     (D2-D4)
+├── rag/             ingest, AST chunking, embed, retrieve, answer  (D2-D3)
 ├── sandbox/         hardened ephemeral executor               (D7)
 ├── guardrails/      sentinel_in / sentinel_out / policy       (D10)
-├── tools/           filesystem, ripgrep, AST, git, pytest     (D6-D7)
-├── api/             FastAPI + SSE                             (D12)
+├── tools/           ripgrep + AST symbols now; git, pytest    (D3, D6-D7)
+├── api/             FastAPI: health, search, ask; SSE          (D3, D12)
 └── cli/             the `forge` command                       (D12)
 ```
 
