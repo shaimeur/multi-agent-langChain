@@ -123,19 +123,20 @@ Recall@10 printed.** **MET** (2026-07-23) — `evals/run_retrieval.py` prints Re
 (Hit@10 0.40, MRR 0.207) over 15 golden pairs. A low, honest baseline: MiniLM's code weakness and
 test-corpus pollution are D4's to fix. `uv run pytest` → 93 passed.
 
-### [ ] D4 · RAG evaluation and config freeze — *do not sacrifice this day*
+### [x] D4 · RAG evaluation and config freeze — DoD MET (2026-07-23)
 
-- [ ] Parent-document expansion (match on the function chunk, generate from the file section) + token-budget packer producing a `ContextPack`
-- [ ] Cross-encoder reranker behind `RERANK_ENABLED`, wired into the eval harness only, off in the live path (descope §3)
-- [ ] Golden set to 30–40 verified pairs (descope §7, down from 60–80)
-- [ ] `evals/run_retrieval.py` — Recall@5/@10, Precision@5, MRR, nDCG@10, hit rate, p95 latency, cost per query
-- [ ] `evals/run_ablation.py` — all 5 §13.1 configurations in one command, emitting the markdown table
-- [ ] Run the ablation. Decide MiniLM vs BGE-M3 **on Recall@10 and nDCG@10**, not on throughput. Freeze the winner in `config.py` and write the decision — including the cost of the reranker you are shipping without — into `docs/evaluation.md`
-- [ ] RAGAS or deepeval baseline: faithfulness, answer relevancy, context precision/recall, plus a citation-precision metric *(the droppable item if the day runs long)*
-- [ ] `notebooks/01_rag_evaluation.ipynb` — the ablation with charts (L3, part 1)
+- [x] Parent-document expansion (match on the function chunk, generate from the file section) + token-budget packer producing a `ContextPack` — `rag/pack.py`
+- [x] Cross-encoder reranker behind `RERANK_ENABLED`, wired into the eval harness only, off in the live path (descope §3) — `rag/rerank.py`
+- [x] Golden set to 30–40 verified pairs (descope §7) — **42 pairs** (NL + identifier + multi-chunk)
+- [x] Full metric set — Recall@5/@10, Precision@5, MRR, nDCG@10, hit rate, p95 latency. Landed in `forge.evaluation` + `evals/run_ablation.py` (span-overlap scoring); `run_retrieval.py` stays the exact-id D3 baseline. *(Cost/query: $0 — local self-hosted embeddings; latency is the operative cost.)*
+- [x] `evals/run_ablation.py` — all 5 §13.1 configs + diagnostics + BGE, one command, emits the markdown table
+- [x] Ran the ablation. **MiniLM frozen** on Recall@10 (0.905 vs BGE 0.857) — decision + reranker cost in `docs/evaluation.md` D4
+- [ ] ~~RAGAS/deepeval generation metrics~~ — **deferred** (the droppable item): needs a cloud key, B2 still open. Do on D5 once a key lands
+- [x] `notebooks/01_rag_evaluation.ipynb` — the ablation with charts (L3, part 1)
 
 **DoD: the §13.1 ablation table is filled with real numbers and the winning config is frozen in
-`config.py`.**
+`config.py`.** **MET** — table in `docs/evaluation.md` D4, `EMBEDDING_MODEL` frozen (MiniLM),
+`RERANK_ENABLED=false` justified by measured harm. `uv run pytest` → 134 passed.
 
 ---
 
