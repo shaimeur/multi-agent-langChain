@@ -142,17 +142,19 @@ test-corpus pollution are D4's to fix. `uv run pytest` → 93 passed.
 
 ## Sprint 2 — Agents and orchestration (D5–D9)
 
-### [ ] D5 · LangGraph skeleton + memory
+### [x] D5 · LangGraph skeleton + memory — DoD MET (2026-07-24)
 
-- [ ] `core/state.py` — `ForgeState`, the `merge_chunks` reducer (dedup by `chunk_id`), `Budget`
-- [ ] `core/agents/supervisor.py` — `with_structured_output(RouteDecision)`, intent classification, `Command(goto=...)` routing, budget guard. Router tier only, never free text
-- [ ] `core/agents/retriever.py` — wraps D3/D4 retrieval; on re-invocation returns a *differential* pack, not the whole thing again
-- [ ] `core/graph.py` — assemble the StateGraph with `answer_node` and sentinel pass-throughs; wire `AsyncSqliteSaver` with `thread_id = session_id` (descope §1)
-- [ ] Sliding-summary node — past N tokens, fold the oldest turns into one `SystemMessage`, keep the last k verbatim
-- [ ] `forge ask` on the graph with `astream` and a Rich live agent panel; multi-turn against the target repo
-- [ ] `scripts/c4_restart_resume.sh` — kill the process mid-session, resume from the checkpoint (this is the **C4** proof)
+- [x] `core/state.py` — `ForgeState`, the `merge_chunks` reducer (dedup by `chunk_id`, dict-tolerant), `Budget`
+- [x] `core/agents/supervisor.py` — `with_structured_output(RouteDecision)`, `Command(goto=...)` routing, budget guard (graceful stop), deterministic fallback for a weak local model. Router tier only
+- [x] `core/agents/retriever.py` — wraps D3/D4 (prefer_implementation + parent expansion live); returns a *differential* pack on re-entry
+- [x] `core/graph.py` — StateGraph (supervisor → retriever → answer → summary); `AsyncSqliteSaver` with `thread_id = session_id` (descope §1). Sentinel pass-throughs deferred to D10
+- [x] Sliding-summary node — folds the oldest turns into a summary + `RemoveMessage`, keeps the last k. Deterministic (no key); LLM summariser is a later refinement
+- [x] `forge ask --session` on the graph with `astream` + a Rich live agent-timeline panel; multi-turn via checkpoint resume
+- [x] `scripts/c4_restart_resume.sh` — two processes, same session over the SQLite checkpoint (the **C4** proof)
 
-**DoD: multi-turn grounded Q&A with citations, surviving a process restart mid-session.**
+**DoD: multi-turn grounded Q&A with citations, surviving a process restart mid-session.** **MET** —
+`uv run pytest tests/test_graph.py` (incl. `test_session_survives_a_process_restart`) green offline;
+`uv run pytest` → **143 passed**.
 
 ### [ ] D6 · Planner + Editor
 

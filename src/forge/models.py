@@ -172,3 +172,26 @@ class GroundedAnswer(BaseModel):
     grounded: bool = False
     citations: list[Citation] = Field(default_factory=list)
     sources: list[SourceRef] = Field(default_factory=list)
+
+
+class Route(StrEnum):
+    """Where the SUPERVISOR sends the turn next (cahier §4)."""
+
+    RETRIEVE = "retrieve"
+    """The question needs fresh code context — go to the RETRIEVER."""
+    ANSWER = "answer"
+    """Enough context is already in the pack — answer directly (a follow-up)."""
+    END = "end"
+    """A greeting, thanks, or nothing to do — no retrieval, no generation."""
+
+
+class RouteDecision(BaseModel):
+    """The SUPERVISOR's routing verdict — router tier, structured, never free text.
+
+    Cahier §4 makes the supervisor a router, not a content generator: it emits this
+    small typed decision and nothing else. ``rationale`` is one line kept for the
+    trace, not shown to the user.
+    """
+
+    route: Route = Route.RETRIEVE
+    rationale: str = ""

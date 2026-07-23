@@ -89,6 +89,36 @@ def _sources(pack: ContextPack) -> list[SourceRef]:
     ]
 
 
+_EMPTY = "Nothing is indexed for that query. Run `forge index data/target` first."
+
+
+def ground_answer(
+    question: str, pack: ContextPack, *, llm: BaseChatModel, repo_name: str = "the"
+) -> GroundedAnswer:
+    """Answer strictly from ``pack``, then verify every citation in code (§8.4).
+
+    The grounding core shared by the direct ``answer_question`` path and the graph's
+    answer node: numbered snippets in, ``[n]`` citations out, each resolved against
+    the pack via ``ContextPack.supports``. An empty pack short-circuits before the
+    model is called — there is nothing to be grounded in.
+    """
+    sources = _sources(pack)
+    if not pack.chunks:
+        return GroundedAnswer(question=question, answer=_EMPTY, grounded=False, sources=sources)
+
+    reply = llm.invoke(_messages(question, pack, repo_name))
+    text = (reply.content if hasattr(reply, "content") else str(reply)).strip()
+    citations = _citations(text, pack)
+    grounded = bool(citations) and all(pack.supports(c) for c in citations)
+    return GroundedAnswer(
+        question=question,
+        answer=text,
+        grounded=grounded,
+        citations=citations,
+        sources=sources,
+    )
+
+
 def answer_question(
     question: str,
     *,
@@ -118,27 +148,12 @@ def answer_question(
         repo=repo,
     )
     pack = ContextPack(chunks=[h.chunk for h in hits], queries=[question])
-    sources = _sources(pack)
-
     if not pack.chunks:
+        # Answer honestly without paying to build (or call) a model.
         return GroundedAnswer(
-            question=question,
-            answer="Nothing is indexed for that query. Run `forge index data/target` first.",
-            grounded=False,
-            sources=sources,
+            question=question, answer=_EMPTY, grounded=False, sources=_sources(pack)
         )
 
     repo_name = Path(str(repo or settings.target_repo)).name
     llm = llm or build_llm(LLMRole.REASONER, num_ctx=_ANSWER_NUM_CTX, settings=settings)
-    reply = llm.invoke(_messages(question, pack, repo_name))
-    text = (reply.content if hasattr(reply, "content") else str(reply)).strip()
-
-    citations = _citations(text, pack)
-    grounded = bool(citations) and all(pack.supports(c) for c in citations)
-    return GroundedAnswer(
-        question=question,
-        answer=text,
-        grounded=grounded,
-        citations=citations,
-        sources=sources,
-    )
+    return ground_answer(question, pack, llm=llm, repo_name=repo_name)

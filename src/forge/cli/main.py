@@ -7,14 +7,17 @@ option. Commands are stubbed here and filled in as their subsystems land.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 
 from forge.config import LLMRole, get_settings
+from forge.models import GroundedAnswer
 
 app = typer.Typer(
     name="forge",
@@ -127,19 +130,34 @@ def search(
 def ask(
     question: str = typer.Argument(..., help="Question about the codebase."),
     k: int = typer.Option(8, "--k", help="How many snippets to ground the answer in."),
+    session: str | None = typer.Option(
+        None,
+        "--session",
+        "-s",
+        help="Run on the multi-agent graph under this session id: checkpointed, "
+        "multi-turn, and it resumes after a restart. Without it, the direct RAG path.",
+    ),
 ) -> None:
     """Grounded answer with verified citations (cahier 6.6).
 
-    Direct RAG — retrieve, answer from the snippets, then verify every citation in
-    code against what was retrieved. Not the full agent graph (that is D5-D9); the
-    smallest thing that is a usable service. Needs an LLM: local Ollama by default
-    (see .env.local.example), or a provider key.
+    Without ``--session``: the direct RAG path — retrieve, answer from the snippets,
+    verify every citation in code. With ``--session``: the LangGraph (D5) —
+    supervisor → retriever → answerer with sliding-summary memory, checkpointed to
+    SQLite so the same session id resumes across processes. Needs an LLM: local
+    Ollama by default (see .env.local.example), or a provider key.
     """
-    from forge.rag.answer import answer_question
+    if session is not None:
+        result = asyncio.run(_ask_graph(question, session))
+    else:
+        from forge.rag.answer import answer_question
 
-    with console.status("Retrieving and answering..."):
-        result = answer_question(question, k=k)
+        with console.status("Retrieving and answering..."):
+            result = answer_question(question, k=k)
 
+    _render_answer(result)
+
+
+def _render_answer(result: GroundedAnswer) -> None:
     badge = "[green]● grounded[/]" if result.grounded else "[yellow]○ ungrounded[/]"
     console.print()
     console.print(Panel(result.answer, title=f"forge ask · {badge}", border_style="cyan"))
@@ -162,6 +180,65 @@ def ask(
             "[yellow]No verified citation.[/] The model did not ground its answer in the "
             f"{len(result.sources)} retrieved snippet(s) — treat the answer with suspicion."
         )
+
+
+def _step_line(node: str, delta: dict) -> str:
+    """One line of the live agent timeline for a streamed node update."""
+    if node == "supervisor":
+        route = (delta or {}).get("route")
+        where = getattr(route, "route", "…")
+        return f"[cyan]●[/] supervisor → [bold]{getattr(where, 'value', where)}[/]"
+    if node == "retriever":
+        pack = (delta or {}).get("pack")
+        n = len(getattr(pack, "chunks", []) or [])
+        return f"[cyan]●[/] retriever · {n} chunks packed"
+    if node == "answer":
+        ans = (delta or {}).get("answer")
+        state = "grounded" if getattr(ans, "grounded", False) else "ungrounded"
+        return f"[cyan]●[/] answerer · {state}"
+    if node == "summary":
+        return "[cyan]●[/] summary · folded older turns"
+    return f"[cyan]●[/] {node}"
+
+
+async def _ask_graph(question: str, session_id: str) -> GroundedAnswer:
+    """Stream one turn through the graph, showing a live agent timeline."""
+    from langchain_core.messages import HumanMessage
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+    from forge.core.graph import build_default_nodes, build_graph
+
+    settings = get_settings()
+    with console.status("Loading models and index..."):
+        nodes = build_default_nodes(settings)
+
+    config = {"configurable": {"thread_id": session_id}}
+    steps: list[str] = []
+
+    def panel() -> Panel:
+        grid = Table.grid(padding=(0, 1))
+        for line in steps or ["[dim]starting…[/]"]:
+            grid.add_row(line)
+        return Panel(grid, title=f"forge · session {session_id}", border_style="cyan")
+
+    settings.checkpoint_db.parent.mkdir(parents=True, exist_ok=True)
+    async with AsyncSqliteSaver.from_conn_string(str(settings.checkpoint_db)) as checkpointer:
+        graph = build_graph(nodes, checkpointer=checkpointer)
+        with Live(panel(), console=console, refresh_per_second=8) as live:
+            async for update in graph.astream(
+                {"messages": [HumanMessage(content=question)], "session_id": session_id},
+                config=config,
+                stream_mode="updates",
+            ):
+                for node, delta in update.items():
+                    steps.append(_step_line(node, delta))
+                    live.update(panel())
+        snapshot = await graph.aget_state(config)
+
+    answer = snapshot.values.get("answer")
+    if answer is None:
+        return GroundedAnswer(question=question, answer="No answer was produced.", grounded=False)
+    return answer if isinstance(answer, GroundedAnswer) else GroundedAnswer(**answer)
 
 
 @app.command()

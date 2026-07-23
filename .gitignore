@@ -22,6 +22,8 @@ data/qdrant/
 data/workspaces/
 data/target/
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.db
 
 # IMPORTANT: data/fixtures/ is deliberately NOT ignored.
