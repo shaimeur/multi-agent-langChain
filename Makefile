@@ -1,7 +1,11 @@
-.PHONY: install test lint fmt api cli docker requirements
+.PHONY: install test lint fmt api cli docker requirements goals
 
 install:
 	uv sync --extra dev
+
+# Where the build plan says you are — the resume point, without opening the file.
+goals:
+	@sed -n '/^## Where I am/,/^---/p' GOALS.md
 
 test:
 	CACHE_MODE=replay uv run pytest

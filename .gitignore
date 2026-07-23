@@ -9,6 +9,10 @@ dist/
 build/
 *.egg-info/
 
+# Claude Code continuity: hooks, settings and commands are committed; the
+# pre-compact transcript archive is local session state and is not.
+.claude/transcripts/
+
 # Secrets — never commit
 .env
 .env.local
