@@ -25,6 +25,21 @@ class ChunkKind(StrEnum):
     """Markdown, docs, anything chunked by structure rather than syntax."""
 
 
+class Retriever(StrEnum):
+    """Which retriever surfaced a hit.
+
+    Kept on every ``SearchHit`` so the fused ranking can show *why* a chunk is
+    there, and so D4's ablation can switch one off and measure what it cost.
+    """
+
+    DENSE = "dense"
+    """Semantic similarity over the MiniLM/BGE vectors — 'where is X handled'."""
+    SPARSE = "sparse"
+    """BM25 over code-aware tokens — the exact-identifier half."""
+    RIPGREP = "ripgrep"
+    """Literal text match, resolved back to the chunk that contains the line."""
+
+
 class Chunk(BaseModel):
     """One retrievable unit, carrying everything a citation needs to resolve.
 
@@ -99,3 +114,26 @@ class ContextPack(BaseModel):
             and citation.start_line >= chunk.start_line
             and citation.end_line <= chunk.end_line
         )
+
+
+class SearchHit(BaseModel):
+    """One retrieved chunk with its score and provenance (cahier §6.5).
+
+    ``retrievers`` is a list, not a single value, because RRF fusion collapses a
+    chunk that several retrievers ranked into one hit — and "dense *and* sparse
+    both surfaced this" is exactly the signal the search table exists to show. A
+    hit carries one retriever before fusion and can carry several after.
+    ``component_scores`` keeps each retriever's raw score for the trace and the
+    eval harness; ``score`` is the operative one — a raw similarity for a
+    single-retriever hit, the fused RRF score once retrievers are combined.
+    """
+
+    chunk: Chunk
+    score: float
+    retrievers: list[Retriever] = Field(default_factory=list)
+    component_scores: dict[str, float] = Field(default_factory=dict)
+
+    @property
+    def provenance(self) -> str:
+        """``dense+sparse`` — the retrievers that found this, for the table."""
+        return "+".join(r.value for r in self.retrievers)

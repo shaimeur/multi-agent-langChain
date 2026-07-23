@@ -1,0 +1,15 @@
+{"id": 1, "question": "How is a SQL string split into individual statements?", "relevant": ["af5056bbcb1ecedb"], "answer": "sqlparse/engine/statement_splitter.py :: StatementSplitter"}
+{"id": 2, "question": "Where are the SQL keywords and the lexer's token regex defined?", "relevant": ["4160144fa183c7c0"], "answer": "sqlparse/keywords.py :: SQL_REGEX + KEYWORDS"}
+{"id": 3, "question": "How are comments stripped out of a SQL statement?", "relevant": ["448dd249f7279bf5"], "answer": "sqlparse/filters/others.py :: StripCommentsFilter"}
+{"id": 4, "question": "Where is the reindent / pretty-print formatting implemented?", "relevant": ["68e437824795fcd9", "148d803353172e4c"], "answer": "sqlparse/filters/reindent.py :: ReindentFilter (split across two chunks)"}
+{"id": 5, "question": "How is the case of keywords changed to upper or lower case?", "relevant": ["ea020c4273ee8951"], "answer": "sqlparse/filters/tokens.py :: KeywordCaseFilter"}
+{"id": 6, "question": "How does the lexer turn raw text into a token stream?", "relevant": ["db22cdd2a9ef3ee8"], "answer": "sqlparse/lexer.py :: Lexer.get_tokens"}
+{"id": 7, "question": "Where are parentheses grouped into a single token?", "relevant": ["fe0c09a75b877e31"], "answer": "sqlparse/engine/grouping.py :: group_parenthesis"}
+{"id": 8, "question": "How are identifiers with an alias parsed and grouped?", "relevant": ["ed497ed729edbd49"], "answer": "sqlparse/engine/grouping.py :: group_aliased"}
+{"id": 9, "question": "Where is a WHERE clause represented in the parse tree?", "relevant": ["919679f2dad5e0ca"], "answer": "sqlparse/sql.py :: Where"}
+{"id": 10, "question": "How are function calls grouped during parsing?", "relevant": ["74834c50db0bba97"], "answer": "sqlparse/engine/grouping.py :: group_functions"}
+{"id": 11, "question": "Where does the formatter validate its options?", "relevant": ["60252edd2f3ced60"], "answer": "sqlparse/formatter.py :: validate_options"}
+{"id": 12, "question": "How are surrounding quotes removed from a value?", "relevant": ["ba149989e648fe71"], "answer": "sqlparse/utils.py :: remove_quotes"}
+{"id": 13, "question": "Where is a CASE expression represented as a token?", "relevant": ["a750323e694cabf2"], "answer": "sqlparse/sql.py :: Case"}
+{"id": 14, "question": "How is the token list regrouped into a tree after tokenizing?", "relevant": ["ac5c4c60c8ae612f"], "answer": "sqlparse/engine/grouping.py :: group"}
+{"id": 15, "question": "Where is the command-line entry point for the formatter?", "relevant": ["87b823338a323a09"], "answer": "sqlparse/cli.py :: main"}

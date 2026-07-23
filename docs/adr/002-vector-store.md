@@ -20,7 +20,7 @@ container. When blank it falls back to embedded mode against `QDRANT_PATH`, same
 | Option | Rejected because |
 |---|---|
 | **Chroma** | Simplest to start, but weaker payload filtering and no first-class sparse vectors. We would hand-roll the half of the pipeline that matters most for code. |
-| **pgvector** | One fewer service *if* Postgres were already there — but ADR-003 drops Postgres, so it would be adding a service, not saving one. Hybrid search would be hand-rolled. |
+| **pgvector** | One fewer service *if* Postgres were already there — but descope §1 drops Postgres for SQLite, so it would be adding a service, not saving one. Hybrid search would be hand-rolled. |
 | **FAISS** | No payload filtering, no persistence story, no sparse. |
 
 ## The escape hatch, and why it exists

@@ -101,29 +101,27 @@ decision (descope §1), not by omission.
 - [x] `forge index <path>`, incremental by default via `git diff --name-only`, `--full` to rebuild
 - [x] Measure embedding throughput and switch the default on the number — 47 vs 1709 ms/chunk, `docs/evaluation.md`
 - [ ] ~~tree-sitter chunker for TS/TSX~~ — **cut**, cut-list item 3, taken early. `walker.LANGUAGES` is Python + prose only
-- [ ] Index the actual target repo; record chunk count, wall clock and index size in `docs/evaluation.md`
+- [x] Index the actual target repo; record chunk count, wall clock and index size in `docs/evaluation.md`
 
-**DoD: the target repo is fully indexed; chunk count and time recorded.** **NOT MET** — blocked on
-B1, not failed. The pipeline is complete and measured (34 files → 345 chunks, 16.2 s), but against
-FORGE itself. It converts to met within an hour of choosing the repo.
+**DoD: the target repo is fully indexed; chunk count and time recorded.** **MET** (on D3,
+2026-07-23) — `sqlparse` 0.5.5 at `0d24023`: 59 files → 617 chunks, 51.6 s, 3.3 MB on disk
+(`docs/evaluation.md`). B1 resolved in ADR-003.
 
-> **Response to the miss:** do not cut yet. The cheapest fix is D3 #1, which is the next box anyway.
-> If the target repo is still unchosen at the end of the next session, take cut-list item 1 (MCP
-> server) that evening — and fix C6 first, per O2.
+### [x] D3 · Retrieval — DoD met (2026-07-23)
 
-### [ ] D3 · Retrieval
-
-- [ ] **Choose the demo target repository** — 3–5k LOC Python (descope §9, bottom of the cahier's range), *must ship a real pytest suite*, no compiled extensions. Clone at a pinned sha into `data/target`, set `TARGET_REPO`, record the choice and the reasoning in a one-paragraph ADR-003
-- [ ] `forge index data/target` — record chunks, time and index size in `docs/evaluation.md`; closes D2's DoD
-- [ ] `rag/retrieve.py` — dense search + sparse search over the named vectors, returning a `SearchHit` carrying score and which retriever found it
-- [ ] RRF fusion over dense/sparse/ripgrep result lists + payload filters (language, path prefix)
-- [ ] `tools/ripgrep.py` and `tools/ast_symbols.py` — deterministic literal search and tree-sitter definition/reference lookup
-- [ ] Gate the query rewrite: identifier-shaped queries (`parse_config`, `SessionManager`) skip the LLM and go straight to ripgrep + sparse (descope §8.2) — cheaper, and *more* precise
-- [ ] `forge search "..."` — Rich table of `path:line`, symbol, score, which retriever hit it
-- [ ] Golden set v1: 15 hand-verified `(question, relevant chunk_ids)` pairs in `evals/golden/code.jsonl`. Start here, not on D4 — hand-verification is slower than it looks (cahier §18 action #5)
+- [x] **Choose the demo target repository** — 3–5k LOC Python (descope §9, bottom of the cahier's range), *must ship a real pytest suite*, no compiled extensions. Clone at a pinned sha into `data/target`, set `TARGET_REPO`, record the choice and the reasoning in a one-paragraph ADR-003 → `sqlparse` 0.5.5 @ `0d24023`, ADR-003. **B1 resolved.**
+- [x] `forge index data/target` — record chunks, time and index size in `docs/evaluation.md`; closes D2's DoD
+- [x] `rag/retrieve.py` — dense search + sparse search over the named vectors, returning a `SearchHit` carrying score and which retriever found it
+- [x] RRF fusion over dense/sparse/ripgrep result lists + payload filters (language, path prefix)
+- [x] `tools/ripgrep.py` and `tools/ast_symbols.py` — deterministic literal search and tree-sitter definition/reference lookup
+- [x] Gate the query rewrite: identifier-shaped queries (`parse_config`, `SessionManager`) skip the LLM and go straight to ripgrep + sparse (descope §8.2) — cheaper, and *more* precise. *(The routing gate is live; the LLM-rewrite branch it guards is deferred to D5 — no provider yet, B2.)*
+- [x] `forge search "..."` — Rich table of `path:line`, symbol, score, which retriever hit it
+- [x] Golden set v1: 15 hand-verified `(question, relevant chunk_ids)` pairs in `evals/golden/code.jsonl`. Start here, not on D4 — hand-verification is slower than it looks (cahier §18 action #5)
 
 **DoD: `forge search "where is <a real subsystem> handled"` returns the right files, with baseline
-Recall@10 printed.**
+Recall@10 printed.** **MET** (2026-07-23) — `evals/run_retrieval.py` prints Recall@10 = 0.400
+(Hit@10 0.40, MRR 0.207) over 15 golden pairs. A low, honest baseline: MiniLM's code weakness and
+test-corpus pollution are D4's to fix. `uv run pytest` → 93 passed.
 
 ### [ ] D4 · RAG evaluation and config freeze — *do not sacrifice this day*
 

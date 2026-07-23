@@ -74,9 +74,58 @@ def index(
 
 
 @app.command()
+def search(
+    query: str = typer.Argument(..., help="Natural-language question or a bare symbol."),
+    k: int = typer.Option(8, "--k", help="How many hits to return."),
+    language: str | None = typer.Option(
+        None, "--language", help="Filter: python, markdown, config."
+    ),
+    path: str | None = typer.Option(None, "--path", help="Filter: repo-relative path prefix."),
+) -> None:
+    """Hybrid retrieval over the indexed repo (cahier 6.5).
+
+    Identifier-shaped queries (``parse_config``, ``SessionManager``) take the
+    lexical path — ripgrep + sparse; everything else takes dense + sparse. RRF
+    fuses the rankings. The table shows which retrievers surfaced each hit.
+    """
+    from forge.rag.retrieve import Filters, hybrid_search, is_identifier_query
+
+    route = (
+        "lexical (ripgrep + sparse)" if is_identifier_query(query) else "semantic (dense + sparse)"
+    )
+    with console.status(f"Searching [{route}]..."):
+        hits = hybrid_search(query, k=k, filters=Filters(language=language, path_prefix=path))
+
+    if not hits:
+        console.print(
+            "[yellow]No hits.[/] Is the repo indexed? Run [bold]forge index data/target[/] first."
+        )
+        raise typer.Exit(1)
+
+    table = Table(title=f"{query!r}  ·  {route}", header_style="bold")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("location")
+    table.add_column("symbol")
+    table.add_column("kind")
+    table.add_column("retrievers")
+    table.add_column("score", justify="right")
+    for rank, hit in enumerate(hits, start=1):
+        c = hit.chunk
+        table.add_row(
+            str(rank),
+            f"{c.path}:{c.start_line}-{c.end_line}",
+            c.symbol or "—",
+            c.kind.value,
+            hit.provenance,
+            f"{hit.score:.4f}",
+        )
+    console.print(table)
+
+
+@app.command()
 def ask(question: str = typer.Argument(..., help="Question about the codebase.")) -> None:
-    """Grounded question against the indexed codebase (cahier 6.6). Lands D3."""
-    raise typer.Exit(_todo("ask", "D3 — hybrid retrieval and grounded generation"))
+    """Grounded question against the indexed codebase (cahier 6.6). Lands D5."""
+    raise typer.Exit(_todo("ask", "D5 — grounded generation on the LangGraph skeleton"))
 
 
 @app.command()

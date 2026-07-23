@@ -55,9 +55,48 @@ chiffres »*. Half the numbers are in.
 
 ---
 
-## D3 — retrieval quality
+## D3 — retrieval
 
-Pending. Golden set + the §13.1 ablation:
+### Target repository index (closes D2's DoD)
+
+`sqlparse` 0.5.5, pinned at `0d24023`, cloned into `data/target` (ADR-003), indexed with
+`forge index data/target --full`:
+
+| Metric | Value |
+|---|---|
+| Files walked | 59 |
+| Chunks produced | 617 |
+| Wall clock (incl. 6.6 s model load) | 51.6 s |
+| Index on disk (embedded Qdrant) | 3.3 MB |
+| BM25 vocabulary | 3 650 terms |
+| Embedder | all-MiniLM-L6-v2, 384-dim |
+
+D2's definition of done — *"the target repo is fully indexed; chunk count and time recorded"* —
+is met here. It was blocked on B1 (repo unchosen), not on the pipeline, exactly as D2 recorded.
+
+### Retrieval baseline — the D3 DoD number
+
+15 hand-verified `(question, chunk_ids)` pairs in `evals/golden/code.jsonl`, scored by
+`uv run python evals/run_retrieval.py` over the live hybrid retriever (dense + sparse, RRF fusion):
+
+| Metric | Value |
+|---|---|
+| Recall@10 | **0.400** |
+| Hit@10 | 0.400 |
+| MRR | 0.207 |
+
+Six of fifteen. Two findings, and D4 is the place to act on both:
+
+1. **MiniLM is weak on code** — exactly what the D2 switch-note predicted when it chose the model on
+   throughput alone and deferred quality to the ablation. 0.40 is that quality's first measurement.
+   D4 decides MiniLM vs BGE-M3 on *this* number, not on the 36× throughput gap.
+2. **The test corpus outranks the implementation.** For *"how are comments stripped"* the five
+   `test_strip_comments_*` functions fill the top of the ranking and bury `StripCommentsFilter`
+   below rank 10 — a descriptive test name matches the query better than the code it exercises.
+   Levers, all on D4: a path/language filter that prefers implementation over tests, parent-document
+   expansion, or the reranker that is already built for the harness.
+
+The §13.1 ablation table stays pending on D4 — this baseline is the first of its rows:
 
 | Configuration | Recall@10 | nDCG@10 | p95 latency |
 |---|---|---|---|
