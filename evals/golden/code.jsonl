@@ -13,3 +13,30 @@
 {"id": 13, "question": "Where is a CASE expression represented as a token?", "relevant": ["a750323e694cabf2"], "answer": "sqlparse/sql.py :: Case"}
 {"id": 14, "question": "How is the token list regrouped into a tree after tokenizing?", "relevant": ["ac5c4c60c8ae612f"], "answer": "sqlparse/engine/grouping.py :: group"}
 {"id": 15, "question": "Where is the command-line entry point for the formatter?", "relevant": ["87b823338a323a09"], "answer": "sqlparse/cli.py :: main"}
+{"id": 16, "question": "What is the public function to split a SQL string into a list of statements?", "relevant": ["655e2016251c5d0c"], "answer": "sqlparse/__init__.py :: split"}
+{"id": 17, "question": "How do you parse a SQL string into a tree of statements through the public API?", "relevant": ["4366d45865595932"], "answer": "sqlparse/__init__.py :: parse"}
+{"id": 18, "question": "Where is the public format() entry point that pretty-prints SQL?", "relevant": ["c52817a7da67d91f"], "answer": "sqlparse/__init__.py :: format"}
+{"id": 19, "question": "How does the lexer decide whether a token value is a keyword?", "relevant": ["e8832884ef3c3f9f"], "answer": "sqlparse/lexer.py :: Lexer.is_keyword"}
+{"id": 20, "question": "How is the shared default Lexer singleton instance obtained?", "relevant": ["490b45ca62f2f33f"], "answer": "sqlparse/lexer.py :: Lexer.get_default_instance"}
+{"id": 21, "question": "Where are the arguments of a function call extracted from the parse tree?", "relevant": ["a6be35a18bcf3be3"], "answer": "sqlparse/sql.py :: Function.get_parameters"}
+{"id": 22, "question": "How is the statement type such as SELECT or INSERT determined?", "relevant": ["9c503729dec5d7eb"], "answer": "sqlparse/sql.py :: Statement.get_type"}
+{"id": 23, "question": "How does a token test whether it matches a given type and value?", "relevant": ["5cf7d98bb7d80b3c"], "answer": "sqlparse/sql.py :: Token.match"}
+{"id": 24, "question": "Where are the individual identifiers of a comma-separated identifier list retrieved?", "relevant": ["f49c524491d53546"], "answer": "sqlparse/sql.py :: IdentifierList.get_identifiers"}
+{"id": 25, "question": "How are consecutive child tokens collapsed into one grouped token?", "relevant": ["6c3d2125268496cd"], "answer": "sqlparse/sql.py :: TokenList.group_tokens"}
+{"id": 26, "question": "How do you find the first non-whitespace token in a token list?", "relevant": ["225aa37622599be4"], "answer": "sqlparse/sql.py :: TokenList.token_first"}
+{"id": 27, "question": "Where are newlines split while ignoring newlines inside quoted strings?", "relevant": ["8f21c8a24bb03420"], "answer": "sqlparse/utils.py :: split_unquoted_newlines"}
+{"id": 28, "question": "What helper simplifies checking a token by instance, match and token type?", "relevant": ["244adb7f6ebd3595"], "answer": "sqlparse/utils.py :: imt"}
+{"id": 29, "question": "How is the alias name of an identifier looked up?", "relevant": ["36cab9b5f1b7aca7"], "answer": "sqlparse/sql.py :: NameAliasMixin.get_alias"}
+{"id": 30, "question": "Where is the pipeline that runs lexing, splitting, grouping and the formatting filters?", "relevant": ["71aaebcd0010081f"], "answer": "sqlparse/engine/filter_stack.py :: FilterStack.run"}
+{"id": 31, "question": "How does the command line build its argparse argument parser?", "relevant": ["735f75d871953fb3"], "answer": "sqlparse/cli.py :: create_parser"}
+{"id": 32, "question": "How does the CLI read and process a single input SQL file?", "relevant": ["bef1443b3e1c0bdf"], "answer": "sqlparse/cli.py :: _process_file"}
+{"id": 33, "question": "How are tokens that have a matching begin and end marker grouped together?", "relevant": ["17addb7bfb3daec7"], "answer": "sqlparse/engine/grouping.py :: _group_matching"}
+{"id": 34, "question": "How is the TokenList container of a group of parsed tokens implemented?", "relevant": ["3f2a7c3de429edba", "8677fcb433ddf265"], "answer": "sqlparse/sql.py :: TokenList (class body split across two chunks)"}
+{"id": 35, "question": "How does the formatter assemble its stack of pre/post processing filters from options?", "relevant": ["cd93e1132a4db815"], "answer": "sqlparse/formatter.py :: build_filter_stack"}
+{"id": 36, "question": "Where does a comment token report whether it spans multiple lines?", "relevant": ["55b53bd3137b15e3"], "answer": "sqlparse/sql.py :: Comment.is_multiline"}
+{"id": 37, "question": "Where is upper/lower case applied to identifier names by a filter?", "relevant": ["b63a74f47b770692"], "answer": "sqlparse/filters/tokens.py :: IdentifierCaseFilter"}
+{"id": 38, "question": "How is the next sibling token after a position located in a token list?", "relevant": ["0a93b6d80577fdd3"], "answer": "sqlparse/sql.py :: TokenList.token_next"}
+{"id": 39, "question": "TruncateStringFilter", "relevant": ["ca10e430cdc377d7"], "answer": "sqlparse/filters/others.py :: TruncateStringFilter (identifier-shaped query)"}
+{"id": 40, "question": "Parenthesis", "relevant": ["5b4029c61f9f627a"], "answer": "sqlparse/sql.py :: Parenthesis (identifier-shaped query)"}
+{"id": 41, "question": "get_typecast", "relevant": ["dd12ff32a77961d6"], "answer": "sqlparse/sql.py :: Identifier.get_typecast (identifier-shaped query)"}
+{"id": 42, "question": "get_real_name", "relevant": ["5b67e2eb34080b25"], "answer": "sqlparse/sql.py :: NameAliasMixin.get_real_name (identifier-shaped query)"}

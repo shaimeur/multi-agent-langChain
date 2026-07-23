@@ -1,16 +1,17 @@
-"""Baseline retrieval metrics over the hand-verified golden set — cahier §13.1.
+"""D3's baseline retrieval number — exact-``chunk_id`` Recall@k/Hit@k/MRR.
 
-Recall@k, Hit@k and MRR against ``evals/golden/code.jsonl`` using the live hybrid
-retriever. This is D3's single baseline number; D4 wraps the same ``evaluate`` in
-the five-configuration ablation, which is why it takes injectable search kwargs
-rather than reaching for a global.
+The single number the D3 DoD reports (Recall@10 = 0.400), kept as the historical
+reference. It scores an *exact* chunk-id match: a retrieved chunk counts only if
+its id is in the golden ``relevant`` set.
+
+D4's full §13.1 metric set — Recall@5/@10, Precision@5, MRR, nDCG@10, hit rate,
+latency, and the five-configuration ablation — lives in ``evals/run_ablation.py``
+and ``forge.evaluation``, which score by (path, line-span) *overlap* so that naive
+and AST chunking are comparable. Every exact-id hit here is also a span hit there,
+so the span numbers are a superset of this one (see docs/evaluation.md D4).
 
     uv run python evals/run_retrieval.py            # against the indexed target repo
     uv run python evals/run_retrieval.py --k 5
-
-Relevance is keyed by ``chunk_id``, which is stable across re-embedding (it hashes
-repo/path/symbol/line, not content), so the same golden file scores every
-embedding candidate in the ablation without re-verification.
 """
 
 from __future__ import annotations

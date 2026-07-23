@@ -18,9 +18,11 @@ from forge.rag.embed import HashingEmbedder
 from forge.rag.ingest import index_repo
 from forge.rag.retrieve import (
     Filters,
+    _demote_tests,
     dense_search,
     hybrid_search,
     is_identifier_query,
+    is_test_path,
     load_encoder,
     ripgrep_search_chunks,
     rrf_fuse,
@@ -236,3 +238,100 @@ def test_path_prefix_filter_narrows_to_a_subtree(indexed, settings, client):
 
 def test_search_on_an_unindexed_collection_is_empty(settings, client):
     assert hybrid_search("anything at all", settings=settings, client=client) == []
+
+
+# --- forced retriever modes (ablation) ------------------------------------
+
+
+def test_mode_dense_only_runs_dense_alone(indexed, settings, client):
+    hits = hybrid_search(
+        "split a sql string", settings=settings, client=client, repo=indexed, mode="dense"
+    )
+    assert hits
+    assert all(h.retrievers == [Retriever.DENSE] for h in hits)
+
+
+def test_mode_hybrid_forces_both_on_an_identifier_query(indexed, settings, client):
+    # 'format_sql' is identifier-shaped, so auto would take the lexical path and
+    # never run dense; mode='hybrid' forces dense + sparse regardless.
+    hits = hybrid_search(
+        "format_sql", settings=settings, client=client, repo=indexed, mode="hybrid"
+    )
+    assert hits
+    assert any(Retriever.DENSE in h.retrievers for h in hits)
+    assert all(Retriever.RIPGREP not in h.retrievers for h in hits)
+
+
+# --- test-corpus demotion (the D3 pollution finding) ----------------------
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("tests/test_format.py", True),
+        ("sqlparse/tests/test_x.py", True),
+        ("test_utils.py", True),
+        ("foo_test.py", True),
+        ("conftest.py", True),
+        ("sqlparse/filters/others.py", False),
+        ("src/tokenizer.py", False),
+    ],
+)
+def test_is_test_path(path, expected):
+    assert is_test_path(path) is expected
+
+
+def test_demote_tests_partitions_impl_before_tests():
+    impl = _hit("a", Retriever.DENSE)
+    impl.chunk.path = "sqlparse/filters/others.py"
+    test = _hit("b", Retriever.SPARSE)
+    test.chunk.path = "tests/test_others.py"
+    # A test ranked first by fusion is pushed below implementation, not dropped.
+    out = _demote_tests([test, impl])
+    assert [h.chunk.path for h in out] == ["sqlparse/filters/others.py", "tests/test_others.py"]
+
+
+@pytest.fixture
+def polluted(tmp_path, settings, client):
+    repo = tmp_path / "polluted"
+    (repo / "src").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "src" / "comments.py").write_text(
+        'def strip_comments(sql):\n    """Strip comments from a SQL statement."""\n    return sql\n'
+    )
+    (repo / "tests" / "test_comments.py").write_text(
+        "def test_strip_comments():\n    assert strip_comments('-- c') == '-- c'\n"
+    )
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"],
+        cwd=repo,
+        check=True,
+    )
+    index_repo(repo, settings=settings, client=client, embedder=HashingEmbedder(), full=True)
+    return repo
+
+
+def test_prefer_implementation_ranks_code_above_its_tests(polluted, settings, client):
+    plain = hybrid_search(
+        "strip comments from a statement",
+        settings=settings,
+        client=client,
+        repo=polluted,
+        mode="hybrid",
+    )
+    preferred = hybrid_search(
+        "strip comments from a statement",
+        settings=settings,
+        client=client,
+        repo=polluted,
+        mode="hybrid",
+        filters=Filters(prefer_implementation=True),
+    )
+    assert {h.chunk.path for h in plain} == {h.chunk.path for h in preferred}, "same set, reordered"
+    # With the lever on, no test chunk outranks an implementation chunk.
+    impl_ranks = [i for i, h in enumerate(preferred) if not is_test_path(h.chunk.path)]
+    test_ranks = [i for i, h in enumerate(preferred) if is_test_path(h.chunk.path)]
+    assert impl_ranks and test_ranks
+    assert max(impl_ranks) < min(test_ranks)

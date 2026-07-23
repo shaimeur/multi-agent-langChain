@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from qdrant_client import QdrantClient, models
 
@@ -36,15 +37,32 @@ so a chunk that several retrievers rank *consistently* outscores one that a sing
 retriever ranks first."""
 
 
+_TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)test_[^/]*\.py$|_test\.py$|(^|/)conftest\.py$")
+
+
+def is_test_path(path: str) -> bool:
+    """True for a test module — a ``tests/`` dir, ``test_*.py``, ``*_test.py``.
+
+    The D3 finding: for *"how are comments stripped"* the five ``test_strip_*``
+    functions match the query wording better than the ``StripCommentsFilter`` they
+    exercise, and BM25 ranks them above it. ``prefer_implementation`` uses this to
+    push tests below implementation after fusion — a targeted answer to the
+    test-corpus pollution the ablation measures.
+    """
+    return bool(_TEST_PATH.search(path))
+
+
 @dataclass(frozen=True)
 class Filters:
     """Metadata narrowing — cahier §6.5. ``language`` is pushed into Qdrant;
     ``path_prefix`` is applied in Python because Qdrant has no native prefix
     match, and post-filtering a small fused set is simpler than a payload-index
-    trick that behaves differently in embedded mode."""
+    trick that behaves differently in embedded mode. ``prefer_implementation``
+    demotes (never drops) test chunks below implementation in the fused ranking."""
 
     language: str | None = None
     path_prefix: str | None = None
+    prefer_implementation: bool = False
 
     def to_qdrant(self) -> models.Filter | None:
         if not self.language:
@@ -247,6 +265,9 @@ def rrf_fuse(lists: list[list[SearchHit]], k: int = RRF_K) -> list[SearchHit]:
     return sorted(fused.values(), key=lambda h: h.score, reverse=True)
 
 
+SearchMode = Literal["auto", "dense", "sparse", "hybrid"]
+
+
 def hybrid_search(
     query: str,
     *,
@@ -258,12 +279,16 @@ def hybrid_search(
     encoder: BM25Encoder | None = None,
     repo: str | Path | None = None,
     collection: str = store.CODE_COLLECTION,
+    mode: SearchMode = "auto",
 ) -> list[SearchHit]:
     """The retrieval entrypoint: pick retrievers by query shape, fuse, truncate.
 
-    Identifier-shaped → ripgrep + sparse (lexical, exact). Otherwise → dense +
-    sparse (semantic + lexical). Injectable dependencies keep the eval harness and
-    the tests from standing up real models.
+    ``mode="auto"`` (the live default) routes by query shape: identifier-shaped →
+    ripgrep + sparse (lexical, exact), otherwise dense + sparse (semantic +
+    lexical). ``dense`` / ``sparse`` / ``hybrid`` force a fixed retriever set — the
+    ablation uses these to isolate one variable per row (dense-only baselines, or
+    hybrid regardless of the gate). Injectable dependencies keep the eval harness
+    and the tests from standing up real models.
     """
     settings = settings or get_settings()
     k = k or settings.retrieval_top_k
@@ -277,14 +302,39 @@ def hybrid_search(
     fetch = max(k * 3, 30)
     encoder = encoder or load_encoder(settings, collection)
 
+    def dense() -> list[SearchHit]:
+        emb = embedder or build_embedder(settings)
+        return dense_search(client, emb, query, fetch, flt, collection)
+
+    def sparse() -> list[SearchHit]:
+        return sparse_search(client, encoder, query, fetch, flt, collection)
+
     lists: list[list[SearchHit]] = []
-    if is_identifier_query(query):
+    if mode == "dense":
+        lists.append(dense())
+    elif mode == "sparse":
+        lists.append(sparse())
+    elif mode == "hybrid":
+        lists += [dense(), sparse()]
+    elif is_identifier_query(query):  # mode == "auto"
         repo_path = Path(repo or settings.target_repo)
         lists.append(ripgrep_search_chunks(client, repo_path, query, fetch, flt, collection))
-        lists.append(sparse_search(client, encoder, query, fetch, flt, collection))
+        lists.append(sparse())
     else:
-        embedder = embedder or build_embedder(settings)
-        lists.append(dense_search(client, embedder, query, fetch, flt, collection))
-        lists.append(sparse_search(client, encoder, query, fetch, flt, collection))
+        lists += [dense(), sparse()]
 
-    return rrf_fuse(lists)[:k]
+    fused = rrf_fuse(lists)
+    if flt.prefer_implementation:
+        fused = _demote_tests(fused)
+    return fused[:k]
+
+
+def _demote_tests(hits: list[SearchHit]) -> list[SearchHit]:
+    """Stable-partition test chunks below implementation, preserving fused order.
+
+    A demotion, not a filter: a test can still be retrieved (a query may genuinely
+    be about one), but it never buries the implementation it exercises.
+    """
+    impl = [h for h in hits if not is_test_path(h.chunk.path)]
+    tests = [h for h in hits if is_test_path(h.chunk.path)]
+    return impl + tests

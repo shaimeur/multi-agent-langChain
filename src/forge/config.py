@@ -80,22 +80,31 @@ class Settings(BaseSettings):
     ollama_coder_model: str = "qwen2.5-coder:7b"
 
     # --- retrieval ------------------------------------------------------
-    # Provisional, chosen on measured CPU throughput: BGE-M3 costs 1709 ms/chunk
-    # here against this model's 47 ms — 36x, which makes a full reindex a coffee
-    # break and breaks the 2-second incremental-reindex demo in cahier §14/J2.
-    # Retrieval quality has NOT been compared yet; D4's ablation decides, and may
-    # well buy BGE-M3 back. See docs/evaluation.md.
+    # FROZEN on D4's ablation, no longer provisional (docs/evaluation.md D4). With
+    # the full pipeline (AST + hybrid + prefer-impl + parent expansion) MiniLM
+    # reaches Recall@10 0.905 vs BGE-M3's 0.857 — it WINS the primary metric, so the
+    # D3 "MiniLM is too weak" worry was a weak pipeline, not a weak embedder. BGE-M3
+    # ranks a little higher (nDCG@10 0.706 vs 0.652) but costs 37x the index time
+    # (742 s vs 20 s — breaks the §14/J2 2 s reindex) and 11x the query latency on
+    # this CPU. Kept configurable for a GPU box where BGE's nDCG edge is free.
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     # Server mode when set (the compose default), embedded local mode otherwise.
     # The escape hatch matters: embedded Qdrant frees ~300 MB-1 GB of RAM on a
     # machine that only has ~5 GB to give.
     qdrant_url: str = ""
     qdrant_path: Path = PROJECT_ROOT / "data" / "qdrant"
-    # Built and measured in the eval harness, off in the live path: a
-    # cross-encoder over the fused top-k costs hundreds of ms per query with no
-    # GPU on this machine. See docs/descope-v1.md §3.
+    # Built and measured in the eval harness, shipped off. D4's ablation settled it
+    # on numbers, not a priori: on this CPU the cross-encoder takes p95 from 14 ms
+    # to 2589 ms AND *lowers* nDCG@10 (0.596 -> 0.547) on code, because ms-marco is
+    # a general web-search reranker. See docs/evaluation.md D4 and descope-v1.md §3.
     rerank_enabled: bool = False
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     retrieval_top_k: int = 8
+    # D4 ablation lever: demote (never drop) test chunks below implementation after
+    # fusion. BM25 ranks test_* by query-word overlap above the code they exercise;
+    # this took hybrid Recall@10 0.750 -> 0.869 for ~35 ms. Wired into the live
+    # grounded-answer path at D5, when the offline forge-ask fixture is re-recorded.
+    prefer_implementation: bool = True
 
     # --- workspace ------------------------------------------------------
     # The repository FORGE operates on. Every write is confined to a git

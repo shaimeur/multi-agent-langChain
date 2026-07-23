@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,7 +21,9 @@ from forge.rag import store
 from forge.rag.chunkers import chunk_file
 from forge.rag.embed import Embedder, build_embedder
 from forge.rag.sparse import BM25Encoder
-from forge.rag.walker import changed_files, head_sha, walk_repo
+from forge.rag.walker import SourceFile, changed_files, head_sha, walk_repo
+
+ChunkFn = Callable[[SourceFile, str, str], list[Chunk]]
 
 MANIFEST = "index-manifest.json"
 
@@ -68,15 +71,21 @@ def write_manifest(settings: Settings, collection: str, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def collect_chunks(repo: Path, *, only: list[str] | None = None) -> tuple[list[Chunk], int]:
-    """Chunk every indexable file. Returns the chunks and the file count."""
+def collect_chunks(
+    repo: Path, *, only: list[str] | None = None, chunk_fn: ChunkFn = chunk_file
+) -> tuple[list[Chunk], int]:
+    """Chunk every indexable file. Returns the chunks and the file count.
+
+    ``chunk_fn`` defaults to the AST-aware chunker; the ablation passes
+    ``chunk_naive`` to build its fixed-character-window baseline collection.
+    """
     sha = head_sha(repo)
     name = repo.resolve().name
     chunks: list[Chunk] = []
     files = 0
     for source in walk_repo(repo, only=only):
         files += 1
-        chunks.extend(chunk_file(source, repo=name, git_sha=sha))
+        chunks.extend(chunk_fn(source, name, sha))
     return chunks, files
 
 
@@ -88,6 +97,7 @@ def index_repo(
     embedder: Embedder | None = None,
     collection: str = store.CODE_COLLECTION,
     full: bool = False,
+    chunk_fn: ChunkFn = chunk_file,
 ) -> IndexReport:
     """Index ``repo`` into ``collection``, incrementally when possible."""
     settings = settings or get_settings()
@@ -125,7 +135,7 @@ def index_repo(
             chunks=store.count(client, collection),
         )
 
-    chunks, files = collect_chunks(repo, only=touched)
+    chunks, files = collect_chunks(repo, only=touched, chunk_fn=chunk_fn)
 
     store.ensure_collection(
         client,

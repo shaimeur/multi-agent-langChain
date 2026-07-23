@@ -96,18 +96,113 @@ Six of fifteen. Two findings, and D4 is the place to act on both:
    Levers, all on D4: a path/language filter that prefers implementation over tests, parent-document
    expansion, or the reranker that is already built for the harness.
 
-The §13.1 ablation table stays pending on D4 — this baseline is the first of its rows:
+The §13.1 ablation table is filled with real numbers in the **D4** section below.
+
+---
+
+## D4 — RAG evaluation and config freeze
+
+The never-cut deliverable (`descope-v1.md` §11). One command, `uv run python evals/run_ablation.py`,
+runs every configuration over the golden set and emits the tables below; `notebooks/01_rag_evaluation.ipynb`
+charts them.
+
+### The metric: (path, line-span) overlap, not exact chunk-id
+
+The D3 baseline scored an exact `chunk_id` match: Recall@10 = **0.400**. That cannot score the naive
+row at all — fixed-character windows produce different ids for the same lines — so the ablation scores
+a **span overlap**: a retrieved chunk covers a relevant answer when they share a file and their line
+ranges intersect. Every id hit is also a span hit, so this is a superset of the 0.400 number, not a
+softer one, and it is the only metric under which naive and AST chunking are comparable. The golden
+set grew from 15 to **42 hand-verified pairs** (`descope-v1.md` §7), mixing natural-language questions,
+identifier-shaped queries, and multi-chunk answers.
+
+### The §13.1 ablation table — MiniLM (the shipped embedder)
 
 | Configuration | Recall@10 | nDCG@10 | p95 latency |
 |---|---|---|---|
-| Naive character chunking + dense only | | | |
-| AST chunking + dense only | | | |
-| AST + hybrid (RRF) | | | |
-| AST + hybrid + reranker | | | |
-| + parent expansion | | | |
+| Naive char chunking + dense | 0.655 | 0.418 | 10 ms |
+| AST chunking + dense | 0.857 | 0.559 | 7 ms |
+| AST + hybrid (RRF) | 0.750 | 0.596 | 14 ms |
+| AST + hybrid + reranker | 0.774 | 0.547 | 2589 ms |
+| + parent expansion | 0.786 | 0.547 | 2345 ms |
 
-The reranker row gets filled in and then **shipped disabled** — see `descope-v1.md` §3. The table is
-what justifies that, so it has to be measured, not assumed.
+Full metrics (span overlap, 42 golden pairs):
+
+| Configuration | R@5 | R@10 | P@5 | MRR | nDCG@10 | hit@10 | chunks/pack | p95 |
+|---|---|---|---|---|---|---|---|---|
+| Naive char chunking + dense | 0.512 | 0.655 | 0.114 | 0.369 | 0.418 | 0.67 | 10 | 10 ms |
+| AST chunking + dense | 0.643 | 0.857 | 0.181 | 0.474 | 0.559 | 0.88 | 10 | 7 ms |
+| AST + hybrid (RRF) | 0.714 | 0.750 | 0.205 | 0.561 | 0.596 | 0.76 | 10 | 14 ms |
+| AST + hybrid + reranker | 0.631 | 0.774 | 0.148 | 0.494 | 0.547 | 0.79 | 10 | 2589 ms |
+| + parent expansion | 0.667 | 0.786 | 0.148 | 0.494 | 0.547 | 0.79 | 31 | 2345 ms |
+
+**AST chunking is the differentiator.** Naive → AST (dense only) lifts Recall@10 from 0.655 to
+**0.857** and nDCG@10 from 0.418 to 0.559 — the cahier's central claim (*"the generic 1000-character
+pipeline behaves badly on source code"*), measured. **Hybrid** raises the top of the ranking
+(R@5 0.643→0.714, MRR 0.474→0.561, nDCG 0.559→0.596) but Recall@10 *dips* to 0.750 — the pollution
+below.
+
+### The test-corpus pollution, and the lever that fixes it (the D3 finding)
+
+For *"how are comments stripped"*, BM25 ranks the five `test_strip_*` functions above the
+`StripCommentsFilter` they exercise, and unweighted RRF fuses those tests into the top-10.
+`prefer_implementation` (in `retrieve.Filters`) demotes — never drops — test chunks below
+implementation after fusion: deterministic, model-free.
+
+| Configuration | R@5 | R@10 | MRR | nDCG@10 | hit@10 | chunks/pack | p95 |
+|---|---|---|---|---|---|---|---|
+| AST + hybrid (baseline) | 0.714 | 0.750 | 0.561 | 0.596 | 0.76 | 10 | 14 ms |
+| AST + hybrid + prefer-impl | 0.774 | **0.869** | 0.593 | **0.652** | 0.88 | 10 | 35 ms |
+| AST + hybrid + prefer-impl + parent expansion | 0.786 | **0.905** | 0.593 | 0.652 | 0.90 | 35 | 20 ms |
+
+The lever takes Recall@10 past dense-only (0.750 → 0.869) for ~35 ms and no model. **Parent-document
+expansion** on top reaches **Recall@10 = 0.905 / hit@10 = 0.90** — the enclosing class is handed to the
+generator, so a split answer such as `TokenList` (two chunks) is covered whole. Its cost is pack size:
+mean chunks per query 10 → 35, bounded by the token-budget packer in production.
+
+### Why the reranker ships disabled (descope §3, arbitrated by numbers)
+
+The cross-encoder (`ms-marco-MiniLM-L-6-v2`) takes p95 from **14 ms → 2589 ms** on this CPU, and being
+a general web-search model it *degrades* the ranking on code: versus plain hybrid it **lowers** R@5
+(0.714 → 0.631), MRR (0.561 → 0.494) and nDCG@10 (0.596 → 0.547). The free `prefer_implementation`
+lever beats it outright. So it is built and measured, and shipped `RERANK_ENABLED=false` — the table is
+the evidence, which is a stronger slide than shipping it silently.
+
+### The embedder decision — MiniLM vs BGE-M3 (cahier §6.3, "arbitrated by numbers")
+
+`code_bge` = the target repo re-embedded with BGE-M3 (617 chunks, **742 s** at ~1.7 s/chunk vs MiniLM's
+~20 s). Both embedders run through the *same* shipped pipeline (AST + hybrid + `prefer_implementation`
++ parent expansion):
+
+| Embedder | R@5 | Recall@10 | MRR | nDCG@10 | hit@10 | p95 / query | index time |
+|---|---|---|---|---|---|---|---|
+| **MiniLM (384-dim)** | 0.786 | **0.905** | 0.593 | 0.652 | **0.90** | **20 ms** | **~20 s** |
+| BGE-M3 (1024-dim) | 0.738 | 0.857 | **0.673** | **0.706** | 0.86 | 233 ms | 742 s |
+
+The two headline metrics **split**: MiniLM wins **Recall@10** (0.905 vs 0.857) and hit@10; BGE-M3 wins
+**nDCG@10** (0.706 vs 0.652) and MRR — it ranks the right chunk a little higher *within* the top-k. The
+tiebreaker is what this system does with the result: the grounded-answer path feeds the whole top-k to
+the LLM and verifies citations **by content**, so *whether the evidence is in the pack* (recall) matters
+more than *where in the pack it sits* (nDCG/MRR). MiniLM wins recall — at **11× lower query latency and
+37× lower index time**, the latter preserving the cahier §14/J2 "2-second incremental reindex" demo, on
+a CPU-only box whose ~5 GB is shared with Qdrant and the API.
+
+**Decision: freeze MiniLM** (`all-MiniLM-L6-v2`, 384-dim), frozen in `config.py`, no longer provisional.
+This *reverses* the D3 hypothesis on evidence: the 0.400 baseline was a weak **pipeline**, not a weak
+**embedder** — MiniLM reaches 0.905 once AST chunking, hybrid retrieval, test-demotion and parent
+expansion are in place, each a bigger lever than the embedder swap. BGE-M3 stays configurable via
+`EMBEDDING_MODEL` for a GPU deployment where its nDCG edge costs nothing.
+
+### The frozen configuration
+
+- **Embedder** — `all-MiniLM-L6-v2` (384-dim), arbitrated above.
+- **Retrieval** — AST chunking · hybrid dense + BM25 with RRF · `prefer_implementation` demotion ·
+  parent-document expansion under a token budget. Best measured **Recall@10 = 0.905, nDCG@10 = 0.652**,
+  up from the D3 exact-id baseline of 0.400.
+- **Reranker** — built and measured, shipped `RERANK_ENABLED=false`.
+- Two levers are staged for D5: the live `forge ask` path adopts `prefer_implementation=True` when the
+  Retriever node lands and the offline mistral fixture is re-recorded (today it is proven in the
+  harness and defaulted in `config.py`, but not yet flipped under the committed demo fixture).
 
 ---
 

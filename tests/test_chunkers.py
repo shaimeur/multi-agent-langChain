@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from forge.models import ChunkKind
-from forge.rag.chunkers import MAX_CHUNK_CHARS, chunk_file
+from forge.rag.chunkers import MAX_CHUNK_CHARS, NAIVE_WINDOW_CHARS, chunk_file, chunk_naive
 from forge.rag.walker import SourceFile
 
 SAMPLE = '''\
@@ -147,3 +147,34 @@ def test_markdown_splits_on_headings():
 
 def test_citation_format_is_clickable():
     assert _by_symbol(_chunks(), "parse_config").citation.startswith("src/auth/session.py:")
+
+
+# --- the naive baseline (ablation row 1) ----------------------------------
+
+
+def test_naive_chunker_ignores_syntax_and_drops_the_header():
+    chunks = chunk_naive(_src(SAMPLE), repo="demo")
+
+    assert chunks
+    # No syntax awareness: nothing is keyed to a symbol, all module-kind.
+    assert all(c.symbol is None and c.kind is ChunkKind.MODULE for c in chunks)
+    assert all(c.parent_id is None for c in chunks)
+    # No enrichment header — the naive baseline embeds text verbatim.
+    assert all(not c.text.startswith("# file:") for c in chunks)
+    assert all(c.text == c.raw for c in chunks)
+
+
+def test_naive_windows_have_honest_contiguous_line_spans():
+    body = "\n".join(f"line_{i} = {i}" for i in range(400))  # well over one window
+    chunks = chunk_naive(_src(body), repo="demo")
+
+    assert len(chunks) > 1
+    # Windows tile the file with no gaps or overlaps.
+    assert chunks[0].start_line == 1
+    for prev, nxt in zip(chunks, chunks[1:], strict=False):
+        assert nxt.start_line == prev.end_line + 1
+    assert max(len(c.raw) for c in chunks) >= NAIVE_WINDOW_CHARS // 2
+
+
+def test_naive_chunker_skips_empty_files():
+    assert chunk_naive(_src("   \n\n"), repo="demo") == []

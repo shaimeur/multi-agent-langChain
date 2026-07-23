@@ -322,3 +322,55 @@ def chunk_file(source: SourceFile, repo: str, git_sha: str = "") -> list[Chunk]:
             # often pointed at a repo precisely because something is wrong in it.
             return chunk_prose(source, repo, git_sha)
     return chunk_prose(source, repo, git_sha)
+
+
+NAIVE_WINDOW_CHARS = 1_000
+"""The generic ~1000-character window §6 opens by criticising, and the size the
+ablation's row-1 baseline uses."""
+
+
+def chunk_naive(source: SourceFile, repo: str, git_sha: str = "") -> list[Chunk]:
+    """Fixed-size character windows — no syntax, no enrichment header.
+
+    This is the ablation's row-1 reference: the pipeline the cahier says *"behaves
+    badly on source code"*, built deliberately so AST chunking has something real
+    to beat. Windows are cut on line boundaries, not mid-line, only so a chunk's
+    ``start_line``/``end_line`` stay honest integers the span-overlap metric can
+    use — the text itself is embedded verbatim, with none of the file/class/import
+    context ``chunk_file`` prefixes.
+    """
+    if not source.text.strip():
+        return []
+    lines = source.text.splitlines()
+    chunks: list[Chunk] = []
+    buf: list[str] = []
+    buf_chars = 0
+    start_line = 1
+    for lineno, line in enumerate(lines, start=1):
+        buf.append(line)
+        buf_chars += len(line) + 1
+        if buf_chars >= NAIVE_WINDOW_CHARS:
+            chunks.append(_naive_chunk(repo, source, git_sha, "\n".join(buf), start_line, lineno))
+            buf, buf_chars, start_line = [], 0, lineno + 1
+    if buf:
+        chunks.append(_naive_chunk(repo, source, git_sha, "\n".join(buf), start_line, len(lines)))
+    return chunks
+
+
+def _naive_chunk(
+    repo: str, source: SourceFile, git_sha: str, body: str, first: int, last: int
+) -> Chunk:
+    return Chunk(
+        chunk_id=make_chunk_id(repo, source.rel_path, None, first),
+        repo=repo,
+        path=source.rel_path,
+        language=source.language,
+        kind=ChunkKind.MODULE,
+        symbol=None,
+        start_line=first,
+        end_line=last,
+        git_sha=git_sha,
+        parent_id=None,
+        text=body,
+        raw=body,
+    )

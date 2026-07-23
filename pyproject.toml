@@ -56,6 +56,13 @@ dev = [
     "pytest-asyncio>=0.25",
     "ruff>=0.9",
 ]
+notebooks = [
+    "ipykernel>=7.3.0",
+    "jupyter-core>=5.9.1",
+    "matplotlib>=3.11.1",
+    "nbconvert>=7.17.1",
+    "pandas>=3.0.3",
+]
 
 [project.scripts]
 forge = "forge.cli.main:app"
