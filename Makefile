@@ -1,4 +1,4 @@
-.PHONY: install test lint fmt api cli docker requirements goals
+.PHONY: install test lint fmt api cli docker sandbox-image requirements goals
 
 install:
 	uv sync --extra dev
@@ -31,3 +31,8 @@ requirements:
 
 docker:
 	docker compose up --build
+
+# The image the executor spawns one throwaway container from per run (cahier 8.3).
+# Without it the sandbox degrades to the documented fallback — limitations.md §1.
+sandbox-image:
+	docker compose --profile build-sandbox build sandbox-image

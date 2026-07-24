@@ -14,13 +14,14 @@ Scope decisions: [`docs/descope-v1.md`](docs/descope-v1.md)
 
 ## Status
 
-Day 3 of 15. Ingestion, hybrid retrieval, and a **runnable grounded-RAG service** (`forge ask` /
-`POST /v1/ask`) work today. The multi-agent graph, sandbox and web UI land over the coming sprints.
+Day 7 of 15. Ingestion, hybrid retrieval, a **runnable grounded-RAG service** (`forge ask` /
+`POST /v1/ask`), the checkpointed LangGraph, the Planner/Editor patch path and the **hardened
+execution sandbox** work today. The repair loop, guardrails and web UI land over the coming sprints.
 
 | Sprint | Days | Delivers | State |
 |---|---|---|---|
-| 1 — Foundations & RAG | D1–D4 | Skeleton, ingestion, retrieval, RAG ablation | **in progress** |
-| 2 — Agents | D5–D9 | LangGraph, Planner/Editor, sandbox, repair loop, HITL | planned |
+| 1 — Foundations & RAG | D1–D4 | Skeleton, ingestion, retrieval, RAG ablation | **done** |
+| 2 — Agents | D5–D9 | LangGraph, Planner/Editor, sandbox, repair loop, HITL | **in progress** (D7 done) |
 | 3 — Guardrails | D10–D11 | Sentinels, policy engine, adversarial suite | planned |
 | 4 — Interfaces | D12–D13 | FastAPI + SSE, `forge` CLI, web UI | planned |
 | 5 — Integration | D14–D15 | Compose, benchmark, docs, defense | planned |
@@ -28,7 +29,11 @@ Day 3 of 15. Ingestion, hybrid retrieval, and a **runnable grounded-RAG service*
 What works today: AST-aware ingestion, hybrid retrieval (dense + sparse + ripgrep, RRF-fused) with
 `file:line` citations, and a grounded question-answering service whose every citation is verified in
 code against what was retrieved. Plus the record/replay fixture layer, the multi-provider LLM
-factory, and the health/search/ask API. **100 tests green.**
+factory, the health/search/ask API, a checkpointed multi-turn graph that survives restart, a
+citation-backed plan → validated `PatchSet` path that never writes to disk unchecked, and an
+execution sandbox that runs tests in an ephemeral container with no network, a read-only root and
+memory/CPU/PID caps — with the fallback's gaps written down in
+[`docs/limitations.md`](docs/limitations.md). **206 tests green.**
 
 ## Quickstart
 
@@ -38,8 +43,13 @@ Runs locally with **no cloud API key** — it answers with the Ollama model on y
 make install
 cp .env.local.example .env      # local profile: Ollama (mistral), embedded Qdrant
 ollama pull mistral             # if you don't have it already
-make test                       # 100 tests, fully offline
+make test                       # 206 tests, fully offline
+make sandbox-image              # optional: build the hardened sandbox image (needs Docker)
 ```
+
+Without that image — or on a machine with no Docker socket — the sandbox degrades to a documented
+`subprocess` fallback that is **not** a security boundary. Every `ExecutionReport` records which one
+ran, and the gap is spelled out in [`docs/limitations.md`](docs/limitations.md) §1.
 
 Index a repository, then search and ask it questions — grounded, with citations:
 

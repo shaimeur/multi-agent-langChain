@@ -30,6 +30,18 @@ class LLMProvider(StrEnum):
     OLLAMA = "ollama"
 
 
+class SandboxBackend(StrEnum):
+    """Which executor to use. Distinct from ``models.Isolation``, which records
+    what actually ran — ``AUTO`` is a preference and can never be an answer."""
+
+    AUTO = "auto"
+    """Container when the Docker socket answers, the weaker fallback otherwise."""
+    DOCKER = "docker"
+    """Require the container. A missing socket is an error, not a silent downgrade."""
+    SUBPROCESS = "subprocess"
+    """Force the fallback. Development and CI only — see docs/limitations.md §1."""
+
+
 class LLMRole(StrEnum):
     """Which model tier a call should use — cahier 12.2.
 
@@ -114,12 +126,18 @@ class Settings(BaseSettings):
     checkpoint_db: Path = PROJECT_ROOT / "data" / "checkpoints.sqlite"
 
     # --- sandbox (cahier 8.3) -------------------------------------------
+    # These caps are quoted verbatim on the security slide and asserted in
+    # tests/test_config.py, so drift is a test failure rather than a false claim.
     sandbox_image: str = "forge-sandbox:latest"
     sandbox_timeout_s: int = 60
     sandbox_memory_mb: int = 512
     sandbox_cpus: float = 1.0
     sandbox_pids_limit: int = 128
     sandbox_max_output_bytes: int = 64_000
+    # AUTO, not DOCKER, so a clean machine without a Docker socket still runs — but
+    # the downgrade is never silent: every ExecutionReport carries the Isolation it
+    # actually got, and the fallback's gaps are written down in limitations.md §1.
+    sandbox_backend: SandboxBackend = SandboxBackend.AUTO
 
     # --- budget guard (cahier 4, A0) ------------------------------------
     max_iterations_per_step: int = 3

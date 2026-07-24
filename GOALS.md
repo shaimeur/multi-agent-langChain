@@ -169,17 +169,19 @@ test-corpus pollution are D4's to fix. `uv run pytest` → 93 passed.
 executed.** **MET** — `pytest tests/test_change.py::test_change_request_yields_a_patch_git_accepts`
 (offline, fakes + real worktree). Real-model patch quality is B2-gated. `uv run pytest` → **161 passed**.
 
-### [ ] D7 · Sandbox service — *hardest infra day, protect it*
+### [x] D7 · Sandbox service — DoD met (2026-07-24)
 
-- [ ] `docker/sandbox.Dockerfile` — python + pytest + ruff, non-root user, no shell tooling that is not needed
-- [ ] `sandbox/runner.py` — ephemeral container per run via the Docker SDK: `--network=none`, read-only root, writable mount limited to the worktree, `--memory=512m --cpus=1 --pids-limit=128`, hard timeout, output truncation at 64 KB
-- [ ] `ExecutionReport` model + a pytest output parser: exit code, passed/failed/errored, failing test names, stderr tail, duration, coverage delta
-- [ ] `run_pytest` / `run_python` / `run_linter` as LangChain tools returning `ExecutionReport`, never prose
-- [ ] Documented fallback: `subprocess` + `resource.setrlimit` + timeout when the Docker socket is unavailable, with the security gap written down rather than hidden (risk register)
-- [ ] Hardening tests: infinite loop killed, fork bomb contained, network egress refused, 10 GB of stdout truncated without taking the API down
+- [x] `docker/sandbox.Dockerfile` — python + pytest + ruff, non-root uid 1000, 160 MB, pip removed after install
+- [x] `sandbox/runner.py` — ephemeral container per run via the Docker SDK: `--network=none`, read-only root, writable mount limited to the worktree, `--memory=512m --cpus=1 --pids-limit=128`, hard timeout, output truncation at 64 KB. All 15 flags verified applied via `docker inspect` on a live container
+- [x] `ExecutionReport` model (`models.py`) + pytest parser (`sandbox/report.py`): exit code, passed/failed/errored/skipped, failing test ids, stderr tail, duration, coverage percent. **Delta is a two-report subtraction — D8's job, see limitations.md §3**
+- [x] `run_pytest` / `run_python` / `run_linter` as LangChain tools returning `ExecutionReport`, never prose. The worktree is bound at construction; targets are escape-checked and a flag is refused as a target
+- [x] Documented fallback: `subprocess` + `setrlimit` + process-group kill, with the gap written down in **`docs/limitations.md` §1** (new file, L2 deliverable). **`RLIMIT_DATA` not `RLIMIT_AS`** — measured: ruff SIGABRTed in 8/10 runs under `RLIMIT_AS`, 0/10 under `RLIMIT_DATA`, which still refuses a 1 GB allocation
+- [x] Hardening tests: infinite loop killed, fork bomb contained by the pid cap, egress refused, unbounded output capped, memory hog refused, read-only root, non-root uid, host filesystem invisible, API keys not inherited — `tests/test_sandbox.py`, 50 tests
 
 **DoD: pytest runs in the sandbox and returns a structured report; a deliberate infinite loop is
-killed cleanly and the API stays up.**
+killed cleanly and the API stays up.** → **MET.** `uv run pytest` → **206 passed, 5 skipped**
+(the 5 are container-only assertions under the fallback param). Compose contributes the image build
+behind a profile; it deliberately does **not** mount the Docker socket — limitations.md §5.
 
 ### [ ] D8 · Tester agent + repair loop
 

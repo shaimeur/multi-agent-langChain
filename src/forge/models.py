@@ -275,3 +275,100 @@ class PatchSet(BaseModel):
 
     summary: str = ""
     patches: list[Patch] = Field(default_factory=list)
+
+
+# --- sandboxed execution (cahier §8.3) ------------------------------------
+
+
+class Isolation(StrEnum):
+    """How strongly a run was *actually* confined. Recorded on every report.
+
+    Carried as data rather than assumed, because the fallback is materially weaker
+    than the container (docs/limitations.md §1): anything that claims "verified in a
+    sandbox" — a reviewer, a slide, the UI — must be able to say which one ran. A
+    report can therefore never hide that it was produced without isolation.
+    """
+
+    DOCKER = "docker"
+    """Ephemeral container: no network, read-only root, all caps dropped, mem/CPU/PID caps."""
+    SUBPROCESS = "subprocess"
+    """No Docker socket: rlimits + process-group kill. **No network or filesystem isolation.**"""
+
+
+class ExecutionOutcome(StrEnum):
+    """The verdict of one sandbox run.
+
+    ``FAILED`` and ``ERROR`` are kept apart deliberately: a failing test is a
+    *result* the repair loop can act on, while an error means no verdict was
+    obtained at all (collection blew up, the image is missing, the runner broke).
+    Feeding the second back to the EDITOR as though it were the first is how a
+    repair loop burns its whole budget rewriting correct code.
+    """
+
+    PASSED = "passed"
+    FAILED = "failed"
+    """The command ran and returned non-zero — failing tests, lint violations."""
+    ERROR = "error"
+    """No verdict: collection error, usage error, or the sandbox could not run it."""
+    TIMEOUT = "timeout"
+    """Killed at the hard deadline. An infinite loop lands here, not in ERROR."""
+
+
+class TestFailure(BaseModel):
+    """One thing that failed, as evidence for a ``RevisionRequest`` (D8).
+
+    Lint violations are reported in this same shape (``sandbox/report.py``) rather
+    than in a parallel type: the repair loop then has one evidence format to quote
+    back at the EDITOR, instead of two that drift apart.
+    """
+
+    test_id: str
+    """``tests/test_calc.py::test_add`` — re-runnable as-is. ``path:line:col`` for a linter."""
+    message: str = ""
+    """The assertion line pytest prints in its short summary, or the ruff rule."""
+
+
+class ExecutionReport(BaseModel):
+    """The SANDBOX_ENGINEER's output — structured, never prose (cahier §4, §8.3).
+
+    Every tool in ``sandbox/tools.py`` returns one of these. The point is that the
+    downstream agents consume *fields*, not a transcript: the repair loop routes on
+    ``outcome`` and cites ``failures``, and the reviewer reads counts. A model
+    summarising "the tests seem to fail" is exactly what this replaces.
+
+    Coverage is reported as a single percentage; the *delta* D8 wants is the
+    subtraction of two reports (before and after the patch), which is the caller's
+    job — a lone report has nothing to compare against.
+    """
+
+    command: list[str] = Field(default_factory=list)
+    outcome: ExecutionOutcome
+    isolation: Isolation
+    exit_code: int | None = None
+    """None when the run was killed at the deadline rather than exiting on its own."""
+    duration_s: float = 0.0
+
+    passed: int = 0
+    failed: int = 0
+    errors: int = 0
+    skipped: int = 0
+    failures: list[TestFailure] = Field(default_factory=list)
+    coverage_percent: float | None = None
+
+    stdout: str = ""
+    stderr: str = ""
+    truncated: bool = False
+    """Output exceeded ``sandbox_max_output_bytes`` and was cut. ``exit_code`` still rules."""
+
+    @property
+    def ok(self) -> bool:
+        return self.outcome is ExecutionOutcome.PASSED
+
+    def headline(self) -> str:
+        """One line for a trace or a CLI table."""
+        counts = f"{self.passed} passed, {self.failed} failed, {self.errors} errors"
+        return (
+            f"{self.outcome.value} [{self.isolation.value}] "
+            f"exit={self.exit_code} {counts} in {self.duration_s:.2f}s"
+            + (" (output truncated)" if self.truncated else "")
+        )

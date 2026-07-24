@@ -69,10 +69,30 @@ services:
     volumes:
       - ollama-models:/root/.ollama
 
-  # `sandbox` lands D7. It is not a long-running service: the executor spawns
-  # ephemeral hardened containers through the Docker SDK
-  # (--network=none, read-only root, non-root user, memory/CPU/PID caps).
-  # What compose contributes is building the image the executor spawns.
+  # The sandbox is not a long-running service: the executor spawns one ephemeral
+  # hardened container per run through the Docker SDK (--network=none, read-only
+  # root, non-root, cap_drop=ALL, memory/CPU/PID caps). What compose contributes is
+  # *building* the image those containers are made from — hence a profile and no
+  # command worth running:
+  #     docker compose --profile build-sandbox build     (or: make sandbox-image)
+  #
+  # NOTE — the api service deliberately does NOT mount /var/run/docker.sock.
+  # Mounting it would let the API spawn those hardened containers, but a container
+  # holding the Docker socket is root-equivalent on the host, which is a strictly
+  # worse exposure than the one the sandbox exists to prevent. So under `compose up`
+  # the executor finds no socket and degrades to the subprocess fallback *inside the
+  # api container* — which is itself a container, so the blast radius is that
+  # container rather than the host. Full hardening is the host-side path (`forge`
+  # run on a machine with Docker). The trade-off is docs/limitations.md §5; opt in by
+  # uncommenting the volume below only if you accept root-equivalent access.
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  sandbox-image:
+    profiles: ["build-sandbox"]
+    build:
+      context: .
+      dockerfile: docker/sandbox.Dockerfile
+    image: forge-sandbox:latest
 
 volumes:
   hf-cache:
