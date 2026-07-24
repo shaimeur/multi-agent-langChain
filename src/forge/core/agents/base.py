@@ -11,7 +11,7 @@ from __future__ import annotations
 from langchain_core.messages import AnyMessage, HumanMessage
 
 from forge.core.state import Budget, ForgeState
-from forge.models import ContextPack
+from forge.models import ChangePlan, ContextPack
 
 
 def message_text(message: AnyMessage) -> str:
@@ -43,6 +43,15 @@ def get_pack(state: ForgeState) -> ContextPack | None:
         return pack
     if isinstance(pack, dict):
         return ContextPack(**pack)
+    return None
+
+
+def get_plan(state: ForgeState) -> ChangePlan | None:
+    plan = state.get("plan")
+    if plan is None or isinstance(plan, ChangePlan):
+        return plan
+    if isinstance(plan, dict):
+        return ChangePlan(**plan)
     return None
 
 

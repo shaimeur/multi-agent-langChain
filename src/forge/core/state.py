@@ -20,7 +20,7 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel
 
 from forge.config import Settings
-from forge.models import Chunk, ContextPack, GroundedAnswer, RouteDecision
+from forge.models import ChangePlan, Chunk, ContextPack, GroundedAnswer, PatchSet, RouteDecision
 
 
 def _as_chunk(chunk: Chunk | dict) -> Chunk:
@@ -95,3 +95,11 @@ class ForgeState(TypedDict, total=False):
     """The sliding summary of folded-away older turns (cahier §7)."""
     answer: GroundedAnswer | None
     """The latest grounded answer, for the CLI / API to render."""
+    plan: ChangePlan | None
+    """The PLANNER's current citation-backed plan (cahier §4/A2)."""
+    plan_reentries: int
+    """How many times the planner has gone back for more context — the re-entry cap."""
+    patchset: PatchSet | None
+    """The EDITOR's structured edits for the plan (cahier §4/A3), never written to disk."""
+    patch_ok: bool
+    """Whether the patchset passed ``git apply --check`` in the worktree."""

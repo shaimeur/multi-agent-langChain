@@ -195,3 +195,83 @@ class RouteDecision(BaseModel):
 
     route: Route = Route.RETRIEVE
     rationale: str = ""
+
+
+# --- planning and editing (cahier §4/A2, A3; §5.1) ------------------------
+
+
+class CitationRef(BaseModel):
+    """A plan step's evidence: the retrieved chunk it relies on.
+
+    The PLANNER must cite at least one per step, and each must resolve into the
+    ContextPack — a step that cites nothing, or cites a chunk that was never
+    retrieved, is rejected *before any code is written* (cahier §4/A2). This is the
+    same groundedness discipline as a citation, applied to a plan.
+    """
+
+    chunk_id: str
+    why: str = ""
+    """One line: what this chunk establishes for the step."""
+
+
+class PlanStep(BaseModel):
+    """One atomic change to one file, with the evidence that justifies it."""
+
+    intent: str
+    """What to change, in a sentence."""
+    target_path: str
+    """The repo-relative file this step edits."""
+    evidence: list[CitationRef] = Field(default_factory=list)
+    rationale: str = ""
+
+    def is_grounded(self, pack: ContextPack) -> bool:
+        """True when the step cites evidence and every citation is in ``pack``."""
+        return bool(self.evidence) and all(
+            pack.by_id(ref.chunk_id) is not None for ref in self.evidence
+        )
+
+
+class ChangePlan(BaseModel):
+    """The PLANNER's output: an ordered, citation-backed plan (cahier §4/A2).
+
+    ``needs_more_context`` lets the planner send the turn back to the RETRIEVER
+    instead of guessing, with ``missing`` describing what to look for — the
+    ``needs_more_context`` loop of §5.1, capped so it cannot ping-pong.
+    """
+
+    summary: str = ""
+    steps: list[PlanStep] = Field(default_factory=list)
+    needs_more_context: bool = False
+    missing: str = ""
+
+    def ungrounded_steps(self, pack: ContextPack) -> list[PlanStep]:
+        """The steps that must be rejected — no evidence, or evidence not in the pack."""
+        return [step for step in self.steps if not step.is_grounded(pack)]
+
+
+class Patch(BaseModel):
+    """One structured edit to one file — a search/replace, not raw diff syntax.
+
+    The EDITOR emits these because asking a model (a weak local one especially) for
+    valid unified-diff text is brittle; the diff is *built* deterministically from
+    the edits (``tools/patch.py``) and only then checked with ``git apply --check``.
+    ``old_string`` must occur exactly once in the target file so the edit is
+    unambiguous.
+    """
+
+    path: str
+    old_string: str
+    new_string: str
+    rationale: str = ""
+
+
+class PatchSet(BaseModel):
+    """The EDITOR's output for a plan step (cahier §4/A3).
+
+    Structured edits the editor never writes to disk itself — ``tools/patch.py``
+    turns them into a diff and dry-runs ``git apply --check`` in the session
+    worktree; a patch that fails the check never reaches a human.
+    """
+
+    summary: str = ""
+    patches: list[Patch] = Field(default_factory=list)
