@@ -74,6 +74,16 @@ def build_diff(workspace: Workspace, patchset: PatchSet) -> str:
     return "".join(parts)
 
 
+def _git_apply(workspace: Workspace, diff: str, *, check_only: bool) -> PatchResult:
+    args = ["git", "-C", str(workspace.path), "apply"]
+    if check_only:
+        args.append("--check")
+    result = subprocess.run(args + ["-"], input=diff, capture_output=True, text=True)
+    if result.returncode == 0:
+        return PatchResult(ok=True, diff=diff)
+    return PatchResult(ok=False, diff=diff, message=result.stderr.strip())
+
+
 def apply_patch_dryrun(workspace: Workspace, patchset: PatchSet) -> PatchResult:
     """Build the diff and run ``git apply --check`` in the worktree. No disk writes."""
     try:
@@ -82,13 +92,23 @@ def apply_patch_dryrun(workspace: Workspace, patchset: PatchSet) -> PatchResult:
         return PatchResult(ok=False, diff="", message=str(error))
     if not diff.strip():
         return PatchResult(ok=False, diff="", message="empty patch — no change produced")
+    return _git_apply(workspace, diff, check_only=True)
 
-    result = subprocess.run(
-        ["git", "-C", str(workspace.path), "apply", "--check", "-"],
-        input=diff,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        return PatchResult(ok=True, diff=diff)
-    return PatchResult(ok=False, diff=diff, message=result.stderr.strip())
+
+def apply_patchset(workspace: Workspace, patchset: PatchSet) -> PatchResult:
+    """Dry-run, then actually write the patch into the session worktree (§5.1, D8).
+
+    The repair loop needs this: a patch that exists only in memory cannot be tested,
+    and the sandbox runs against files on disk. It does **not** weaken D6's rule that
+    the EDITOR never writes — the editor still only emits ``Patch`` objects, and this
+    is a separate deterministic step that refuses anything ``git apply --check`` has
+    not already accepted.
+
+    What it writes to is the per-session *git worktree*, never the target repo: the
+    edit is discarded with the worktree, and `git -C <worktree> diff` is what a human
+    is eventually shown. D9 adds the approval interrupt in front of it.
+    """
+    checked = apply_patch_dryrun(workspace, patchset)
+    if not checked.ok:
+        return checked
+    return _git_apply(workspace, checked.diff, check_only=False)

@@ -322,6 +322,10 @@ class TestFailure(BaseModel):
     back at the EDITOR, instead of two that drift apart.
     """
 
+    # pytest tries to collect anything named Test* as a test class. It is a model,
+    # not a suite, and this is the documented opt-out.
+    __test__ = False
+
     test_id: str
     """``tests/test_calc.py::test_add`` — re-runnable as-is. ``path:line:col`` for a linter."""
     message: str = ""
@@ -372,3 +376,72 @@ class ExecutionReport(BaseModel):
             f"exit={self.exit_code} {counts} in {self.duration_s:.2f}s"
             + (" (output truncated)" if self.truncated else "")
         )
+
+
+# --- the repair loop (cahier §4/A4, §5.1) ---------------------------------
+
+
+class GeneratedTest(BaseModel):
+    """A pytest module the SANDBOX_ENGINEER wrote to pin a change (cahier §4).
+
+    For a bug fix this is written and run *before* the patch, and it is supposed to
+    fail: a regression test that passes against the unfixed code proves nothing, and
+    the loop records that as ``regression_red=False`` rather than quietly accepting
+    a test that would pass no matter what the editor did.
+    """
+
+    path: str
+    """Repo-relative, conventionally ``tests/test_<something>.py``."""
+    source: str
+    rationale: str = ""
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.source.strip()
+
+
+class RevisionRequest(BaseModel):
+    """Why a patch is going back for another pass — evidence, not a complaint.
+
+    Built *from* an ``ExecutionReport`` rather than written by a model. The failing
+    test ids and the stderr tail already are the feedback; asking a model to
+    summarise them into "the tests still seem to fail" would discard the only part
+    the EDITOR can act on precisely. This is the same discipline as a citation:
+    the thing that justifies the next action travels as data.
+    """
+
+    reason: str = ""
+    """One line naming the failure class — what the report *was*, not advice."""
+    failures: list[TestFailure] = Field(default_factory=list)
+    stderr_tail: str = ""
+    target_step: int = 0
+    """Which plan step to re-edit. D9's reviewer may retarget it; D8 always re-edits."""
+
+    @classmethod
+    def from_report(
+        cls, report: ExecutionReport, *, target_step: int = 0, tail: int = 1500
+    ) -> RevisionRequest:
+        """The report's verdict as a revision. Assumes the caller checked it failed."""
+        reasons = {
+            ExecutionOutcome.TIMEOUT: "the tests did not finish before the sandbox deadline",
+            ExecutionOutcome.ERROR: "the suite could not run — collection or usage error",
+        }
+        reason = reasons.get(report.outcome, f"{report.failed} test(s) still failing")
+        return cls(
+            reason=reason,
+            failures=report.failures,
+            stderr_tail=report.stderr[-tail:],
+            target_step=target_step,
+        )
+
+    def as_evidence(self) -> str:
+        """The block handed to the EDITOR. Plain text, but every line is a fact."""
+        lines = [f"The previous patch did not work: {self.reason}."]
+        if self.failures:
+            lines.append("\nFailing tests:")
+            lines += [
+                f"  {f.test_id}" + (f" — {f.message}" if f.message else "") for f in self.failures
+            ]
+        if self.stderr_tail.strip():
+            lines.append(f"\nstderr tail:\n{self.stderr_tail.strip()}")
+        return "\n".join(lines)

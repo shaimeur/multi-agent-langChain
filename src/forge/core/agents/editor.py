@@ -16,7 +16,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from forge.core.agents.base import get_budget, get_plan
 from forge.core.state import ForgeState
 from forge.core.workspace import Workspace
-from forge.models import ChangePlan, PatchSet, PlanStep
+from forge.models import ChangePlan, PatchSet, PlanStep, RevisionRequest
 from forge.tools.patch import apply_patch_dryrun
 
 _SYSTEM = (
@@ -28,16 +28,29 @@ _SYSTEM = (
 )
 
 
-def _messages(step: PlanStep, file_text: str) -> list:
+def _messages(step: PlanStep, file_text: str, revision: RevisionRequest | None = None) -> list:
     human = f"Target file: {step.target_path}\nStep: {step.intent}\n\n<file>\n{file_text}\n</file>"
+    if revision is not None:
+        # The failing test ids and stderr, not a prose complaint — the editor gets to
+        # see exactly what the sandbox saw (cahier §4/A4).
+        human += f"\n\n<previous_attempt>\n{revision.as_evidence()}\n</previous_attempt>"
     return [SystemMessage(_SYSTEM), HumanMessage(human)]
 
 
-def edit_step(llm: BaseChatModel, step: PlanStep, workspace: Workspace) -> PatchSet:
-    """One plan step → a PatchSet. Reads the target from the worktree; never writes."""
+def edit_step(
+    llm: BaseChatModel,
+    step: PlanStep,
+    workspace: Workspace,
+    revision: RevisionRequest | None = None,
+) -> PatchSet:
+    """One plan step → a PatchSet. Reads the target from the worktree; never writes.
+
+    On a repair iteration ``revision`` carries the previous attempt's failures, so the
+    editor is revising against evidence rather than guessing a second time.
+    """
     editor = llm.with_structured_output(PatchSet)
     file_text = workspace.read(step.target_path) if workspace.exists(step.target_path) else ""
-    patchset = editor.invoke(_messages(step, file_text))
+    patchset = editor.invoke(_messages(step, file_text, revision))
     if not isinstance(patchset, PatchSet):
         return PatchSet()
     # A weak model may leave the path blank; anchor it to the step's target.

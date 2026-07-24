@@ -92,6 +92,10 @@ packages = ["src/forge"]
 testpaths = ["tests"]
 addopts = "-q"
 asyncio_mode = "auto"
+# `forge` is installed, but `evals/` is not packaged — it is harness code, not
+# shipped. The project root on the path is what lets tests/test_swe_mini.py import
+# the D8 benchmark without a src-layout hack or a sys.path insert in a conftest.
+pythonpath = ["."]
 # Tests never reach the network — tests/conftest.py forces CACHE_MODE=replay.
 
 [tool.ruff]
@@ -100,6 +104,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+# `evals` is first-party too — it just is not packaged (harness code, not shipped).
+# Without this, isort files it under third-party and fights the import order.
+known-first-party = ["forge", "evals"]
 
 [tool.ruff.lint.flake8-bugbear]
 # Typer's documented idiom is a call in the parameter default; these are

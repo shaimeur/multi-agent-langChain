@@ -183,16 +183,19 @@ killed cleanly and the API stays up.** → **MET.** `uv run pytest` → **206 pa
 (the 5 are container-only assertions under the fallback param). Compose contributes the image build
 behind a profile; it deliberately does **not** mount the Docker socket — limitations.md §5.
 
-### [ ] D8 · Tester agent + repair loop
+### [ ] D8 · Tester agent + repair loop — DoD met (2026-07-24), 1 task carried
 
-- [ ] `core/agents/tester.py` (`SANDBOX_ENGINEER`) — generates or extends pytest; for a bug fix it writes the **failing** regression test first
-- [ ] `implement_loop` subgraph: Editor → Tester → Reviewer(stub) → Editor, capped by `max_iterations_per_step`
-- [ ] `RevisionRequest` built from the `ExecutionReport` — failing test names and stderr as evidence, not a prose complaint
-- [ ] Seed `evals/swe_mini/` with **4** realistic bugs in the target repo (descope §7, down from 10) plus a hidden test suite; keep the harness able to run N so the limit is quota, not code
-- [ ] Prove it: one deliberately broken function repaired autonomously in under 3 iterations
-- [ ] `notebooks/02_agent_traces.ipynb` — annotated trace of one full loop (L3, part 2)
+- [x] `core/agents/tester.py` (`SANDBOX_ENGINEER`) — two nodes: `regression` writes the **failing** test first and records whether it actually went red (`regression_red`); `verify` runs the suite. Neither interprets output — the exit code is the verdict
+- [x] `implement_loop` subgraph (`core/loop.py`): regression → editor → verify → reviewer → {editor | END}, capped by `max_iterations_per_step`. `apply_patchset` (new, in `tools/patch.py`) writes to the worktree only after `git apply --check` passes, so D6's "the EDITOR never writes" survives intact
+- [x] `RevisionRequest` built from the `ExecutionReport` — failing test ids + stderr tail, never a prose complaint. A TIMEOUT is described as a timeout, not as failing tests
+- [x] `evals/swe_mini/` — 4 seeded sqlparse bugs (descope §7) + hidden tests the agent never sees; `--limit N` so the ceiling is quota, not code. `--verify` self-checks each bug is seedable/detectable/fixable with **no model**: `uv run python evals/run_swe_mini.py --verify` → **4/4 sound, exit 0**. It earned its keep immediately — it caught SM-03's reverse patch being ambiguous against the `_CaseFilter` base class
+- [x] Prove it: broken function repaired in **2 iterations** (< 3). Real worktree, real `git apply`, real pytest in the real Docker sandbox, real `ExecutionReport` driving the revision — **only the model is scripted** (wrong first, right second, so a loop that ignored the evidence would stop at the wrong answer)
+- [ ] `notebooks/02_agent_traces.ipynb` — annotated trace of one full loop (L3, part 2). **Carried**: better written against a real-model trace, which is B2-gated
 
-**DoD: a deliberately broken function is repaired autonomously in fewer than 3 iterations.**
+**DoD: a deliberately broken function is repaired autonomously in fewer than 3 iterations.** →
+**MET for the mechanism** (`pytest tests/test_repair_loop.py` → 14 passed, exit 0; full suite **229
+passed, 5 skipped**). Real-model repair quality is **B2-gated** and unproven — same split as D6. The
+swe_mini benchmark is built and self-verified but has not yet been run against a model.
 
 ### [ ] D9 · Reviewer + human-in-the-loop
 

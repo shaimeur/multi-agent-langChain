@@ -20,7 +20,16 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel
 
 from forge.config import Settings
-from forge.models import ChangePlan, Chunk, ContextPack, GroundedAnswer, PatchSet, RouteDecision
+from forge.models import (
+    ChangePlan,
+    Chunk,
+    ContextPack,
+    ExecutionReport,
+    GroundedAnswer,
+    PatchSet,
+    RevisionRequest,
+    RouteDecision,
+)
 
 
 def _as_chunk(chunk: Chunk | dict) -> Chunk:
@@ -103,3 +112,15 @@ class ForgeState(TypedDict, total=False):
     """The EDITOR's structured edits for the plan (cahier §4/A3), never written to disk."""
     patch_ok: bool
     """Whether the patchset passed ``git apply --check`` in the worktree."""
+
+    # --- the repair loop (D8) ---
+    report: ExecutionReport | None
+    """The last sandbox run. What the reviewer routes on — never a model's reading of it."""
+    revision: RevisionRequest | None
+    """Why the last patch came back, as failing test ids and stderr (cahier §4/A4)."""
+    iterations: int
+    """Repair passes spent on the current step, capped by ``max_iterations_per_step``."""
+    test_path: str
+    """The regression test the SANDBOX_ENGINEER wrote, repo-relative."""
+    regression_red: bool
+    """Whether that test actually failed before the fix. A green one pins nothing."""
