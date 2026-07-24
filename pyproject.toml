@@ -45,11 +45,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Web UI. Kept separate until docs/descope-v1.md §2 is resolved (Streamlit vs React):
-# if React wins, this extra is dropped and `web/` becomes a separate build.
-ui = [
-    "streamlit>=1.41",
-]
+# The `ui` extra held streamlit while descope §2 (Streamlit vs React) was open.
+# O1 resolved on 2026-07-24 in favour of the cahier's original — React + Vite + TS —
+# so the extra is dropped as that comment said it would be, and the UI lives in
+# `web/` as its own build rather than as a Python dependency of this package.
 dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",

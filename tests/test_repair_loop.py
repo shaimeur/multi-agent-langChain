@@ -20,11 +20,9 @@ import pytest
 from langgraph.graph import END
 
 from forge.config import CacheMode, Settings
-from forge.core.loop import (
-    build_implement_loop,
-    make_editor_node,
-    make_reviewer_node,
-)
+from forge.core.agents.editor import make_editor_node
+from forge.core.agents.reviewer import make_reviewer_node
+from forge.core.loop import build_implement_loop
 from forge.core.state import Budget
 from forge.core.workspace import create_workspace, remove_workspace
 from forge.models import (

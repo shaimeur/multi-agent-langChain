@@ -53,7 +53,7 @@ after running it.
 
 | # | Criterion | Proof | Done |
 |---|---|---|---|
-| C1 | ≥4 specialised agents, distinct responsibilities | `ls src/forge/core/agents/` → 6 files, and `uv run pytest tests/test_agents.py -k distinct` asserting distinct prompt + tool set + output schema per agent | [ ] |
+| C1 | ≥4 specialised agents, distinct responsibilities | `ls src/forge/core/agents/` → 6 files, and `uv run pytest tests/test_agents.py -k distinct` asserting distinct prompt + tool set + output schema per agent | **[x]** |
 | C2 | The 5 collaboration forms are demonstrable | `notebooks/02_agent_traces.ipynb` — one annotated run showing handoff, delegation (`needs_more_context`), repair loop, reviewer vote, `interrupt()` | [ ] |
 | C3 | Full RAG pipeline, ingestion → grounded generation | `uv run forge index data/target && uv run forge ask "where is X handled"` → answer with `file:line` citations; `uv run pytest evals/test_citations_resolve.py` | [ ] |
 | C4 | Short-term memory works | `scripts/c4_restart_resume.sh` — start a session, `docker compose restart api` mid-run, resume from the checkpoint and get the same thread back | [ ] |
@@ -276,17 +276,18 @@ channel and framing are proven; a full multi-frame run is proven in tests with a
 so any test touching a real provider silently routed every later `FakeListChatModel` through the
 fixture store — a FixtureMiss in an unrelated file. `reset_llm_cache()` + an autouse fixture close it.
 
-### [ ] D13 · Web UI — *Streamlit pending O1*
+### [ ] D13 · Web UI — **React (O1 resolved 2026-07-24: the cahier's original)**
 
-- [ ] Resolve **O1** before writing a line of this. If React is mandatory, this day becomes two and something from the cut list goes
-- [ ] Streamlit app served from the `api` container: streamed chat
-- [ ] Agent activity timeline (`st.status` / `st.empty`) — the visual proof of multi-agent
-- [ ] Plan approval control → `POST /v1/sessions/{id}/approve`
-- [ ] Diff viewer — `difflib.unified_diff` into `st.code(..., language="diff")`, per file
-- [ ] Citations panel, test results panel (red → green), sessions sidebar
-- [ ] ~~Metrics page~~ — cut-list item 4; show LangSmith instead if the day runs long
+- [x] Resolve **O1** — *"If React is mandatory, this day becomes two and something from the cut list goes."* It is. Budget accordingly: D13 is the two-day version and only three days remain
+- [ ] `web/` — Vite + TS + Tailwind, a separate build from the Python package (not served by `api`)
+- [ ] Streamed chat against `POST /v1/sessions/{id}/messages` — the SSE frames are already typed (`node`/`token`/`interrupt`/`done`/`error`), so the client renders frames rather than parsing LangGraph
+- [ ] Agent activity timeline off the `node` frames — the visual proof of multi-agent
+- [ ] Plan-approval modal and patch-approval modal → `POST /v1/sessions/{id}/approve`; the `interrupt` frame already carries the payload each one needs to render
+- [ ] Diff viewer, citations panel, test-results panel (red → green), sessions sidebar
+- [ ] ~~Metrics page~~ — cut-list item 4. `GET /v1/metrics` exists if the day runs long enough to use it
 
 **DoD: the full §15.6 demo scenario runs in the browser with no terminal.**
+**Depends on B2** — the browser scenario needs a real model, not a scripted one.
 
 ---
 
@@ -343,7 +344,7 @@ O3 — approved in code, not yet folded back into the cahier.
 | Spec says | Built as | Because |
 |---|---|---|
 | §7 `AsyncPostgresSaver` + a `postgres` service | `AsyncSqliteSaver`, `guardrail_events` in the same file | Postgres buys multi-writer concurrency; §3.2 puts multi-user out of scope. C4 passes identically. Choosing storage that matches the declared scope beats storage that contradicts it |
-| §10.1 React + TS + Vite + Tailwind, `web` service | Streamlit served from `api` — **pending O1** | C7 asks for "a full scenario runnable in the browser", which Streamlit satisfies. Buys back ~2 days. Loses Monaco-quality diffs, knowingly |
+| ~~§10.1 React + TS + Vite + Tailwind, `web` service~~ | **NOT DESCOPED — O1 resolved 2026-07-24 (human): build React as the cahier specifies.** The Streamlit fallback is withdrawn and its `ui` extra dropped from pyproject; `web/` becomes a separate build | The proposed Streamlit swap bought ~2 days at the cost of Monaco-quality diffs. The human took the cahier's original. **Note the consequence: D13 is now the two-day version with three days left, so D14/D15 are tight — see the cut list** |
 | §6.5 cross-encoder rerank in the live path | Built and measured in the eval harness, shipped disabled | No GPU. §13 insists the choice is arbitrated by numbers — so the ablation reports what disabling it costs, and that is a stronger slide than shipping it silently |
 | §6.3 2–3 embedding candidates benchmarked | One self-hosted model, chosen on measured CPU throughput; second only if D4 runs ahead | Voyage and OpenAI need paid keys, and re-embedding per candidate costs wall clock on CPU. **A real quality loss — report it as one.** Do not present a 3-way comparison that was never run |
 | §12.3 eight compose services | Four: `api`, `qdrant`, `sandbox` (D7), `ollama` behind an `offline` profile | C9's test is a clean machine — the examiner's laptop. Four services that start beat eight that OOM in front of the jury |

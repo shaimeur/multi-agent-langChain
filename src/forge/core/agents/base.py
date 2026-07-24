@@ -11,7 +11,7 @@ from __future__ import annotations
 from langchain_core.messages import AnyMessage, HumanMessage
 
 from forge.core.state import Budget, ForgeState
-from forge.models import ChangePlan, ContextPack
+from forge.models import ChangePlan, ContextPack, ExecutionReport, PatchSet
 
 
 def message_text(message: AnyMessage) -> str:
@@ -53,6 +53,20 @@ def get_plan(state: ForgeState) -> ChangePlan | None:
     if isinstance(plan, dict):
         return ChangePlan(**plan)
     return None
+
+
+def get_report(state: ForgeState) -> ExecutionReport | None:
+    report = state.get("report")
+    if report is None or isinstance(report, ExecutionReport):
+        return report
+    return ExecutionReport(**report) if isinstance(report, dict) else None
+
+
+def get_patchset(state: ForgeState) -> PatchSet:
+    patchset = state.get("patchset")
+    if isinstance(patchset, PatchSet):
+        return patchset
+    return PatchSet(**patchset) if isinstance(patchset, dict) else PatchSet()
 
 
 def est_tokens(text: str) -> int:

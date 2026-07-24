@@ -31,8 +31,19 @@ from collections.abc import Callable, Iterable
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import END
+from langgraph.types import Command
 
 from forge.config import LLMRole, Settings, get_settings
+from forge.core.agents.base import (
+    get_budget,
+    get_pack,
+    get_patchset,
+    get_plan,
+    get_report,
+)
+from forge.core.agents.editor import get_revision
+from forge.core.state import ForgeState
 from forge.models import (
     ChangePlan,
     ContextPack,
@@ -307,3 +318,67 @@ def make_reviewer(
         )
 
     return run
+
+
+def make_reviewer_node(
+    *,
+    llm: BaseChatModel | None = None,
+    settings: Settings | None = None,
+    escalate_after: int | None = None,
+) -> Callable[[ForgeState], Command]:
+    """REVIEWER + routing. Approve ends the run; revise goes back to the editor.
+
+    ``llm=None`` runs the three programmatic points only and records the other two as
+    unevaluated — the honest posture when no reviewer model is configured, rather than
+    a silent pass.
+    """
+    settings = settings or get_settings()
+    escalate_after = escalate_after or settings.max_iterations_per_step
+    reviewer = make_reviewer(llm=llm, settings=settings)
+
+    def reviewer_node(state: ForgeState) -> Command:
+        plan = get_plan(state) or ChangePlan()
+        pack = get_pack(state) or ContextPack()
+        report = get_report(state)
+        patchset = get_patchset(state)
+        iterations = state.get("iterations", 0) + 1
+        budget = get_budget(state)
+
+        revision_in = get_revision(state)
+        step_index = revision_in.target_step if revision_in else 0
+        verdict = reviewer(
+            plan,
+            pack,
+            patchset,
+            report,
+            step_index=step_index,
+            patch_applied=bool(state.get("patch_ok")),
+        )
+        update: dict = {"iterations": iterations, "review": verdict}
+
+        if verdict.approved:
+            return Command(goto=END, update={**update, "revision": None})
+
+        # Which file the disagreement is about, for the pathology counter.
+        contested = dict(state.get("contested", {}))
+        path = plan.steps[step_index].target_path if step_index < len(plan.steps) else "?"
+        contested[path] = contested.get(path, 0) + 1
+        update["contested"] = contested
+
+        exhausted = budget.exceeded(settings)
+        if exhausted:
+            return Command(goto=END, update={**update, "halted": exhausted})
+        if contested[path] >= escalate_after:
+            return Command(goto="escalate", update=update)
+        if iterations >= settings.max_iterations_per_step:
+            return Command(
+                goto=END,
+                update={
+                    **update,
+                    "halted": f"stopped after {iterations} attempts: "
+                    + "; ".join(verdict.feedback[:2]),
+                },
+            )
+        return Command(goto="editor", update={**update, "revision": verdict.as_revision(report)})
+
+    return reviewer_node

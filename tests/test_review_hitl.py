@@ -24,11 +24,12 @@ from forge.core.agents.reviewer import (
     check_grounding,
     check_security,
     check_tests,
+    make_reviewer_node,
     review,
 )
 from forge.core.approval import parse_decision
 from forge.core.checkpoint import forge_serde
-from forge.core.loop import build_change_graph, make_reviewer_node
+from forge.core.loop import build_change_graph
 from forge.core.state import Budget
 from forge.core.workspace import create_workspace, remove_workspace
 from forge.models import (
