@@ -156,17 +156,18 @@ test-corpus pollution are D4's to fix. `uv run pytest` → 93 passed.
 `uv run pytest tests/test_graph.py` (incl. `test_session_survives_a_process_restart`) green offline;
 `uv run pytest` → **143 passed**.
 
-### [ ] D6 · Planner + Editor
+### [x] D6 · Planner + Editor — DoD MET (2026-07-24)
 
-- [ ] Schemas in `models.py`: `CitationRef`, `PlanStep`, `ChangePlan`, `Patch`, `PatchSet`
-- [ ] `core/agents/planner.py` — `with_structured_output(ChangePlan)`; **a step whose `evidence` does not resolve into the ContextPack is rejected before any code is written**
-- [ ] `needs_more_context` → `Command(goto="retriever")` re-entry, with a re-entry cap so it cannot ping-pong
-- [ ] `core/workspace.py` — per-session git worktree under `workspace_root`, created on session start, torn down on close
-- [ ] `core/agents/editor.py` — one plan step → a `PatchSet` of structured edits. Never touches disk
-- [ ] `tools/patch.py` — `apply_patch_dryrun` via `git apply --check` inside the worktree; a patch that fails the check never reaches a human
+- [x] Schemas in `models.py`: `CitationRef`, `PlanStep` (`is_grounded`), `ChangePlan` (`ungrounded_steps`), `Patch` (search/replace), `PatchSet`
+- [x] `core/agents/planner.py` — `with_structured_output(ChangePlan)`; a step whose evidence does not resolve into the ContextPack is dropped before any code is written (grounding enforced in code). Cites snippet numbers, remapped to chunk_ids
+- [x] `needs_more_context` → `Command(goto="retriever")` re-entry, with a `max_reentries` cap
+- [x] `core/workspace.py` — per-session git worktree under `workspace_root`, realpath-escape-guarded, torn down on close; never touches the pinned clone
+- [x] `core/agents/editor.py` — one plan step → a `PatchSet` of structured edits. Never touches disk
+- [x] `tools/patch.py` — build a diff from the edits + `apply_patch_dryrun` via `git apply --check` in the worktree; a failing patch never reaches a human
 
 **DoD: a real change request produces a plan and a patch that `git apply --check` accepts — not yet
-executed.**
+executed.** **MET** — `pytest tests/test_change.py::test_change_request_yields_a_patch_git_accepts`
+(offline, fakes + real worktree). Real-model patch quality is B2-gated. `uv run pytest` → **161 passed**.
 
 ### [ ] D7 · Sandbox service — *hardest infra day, protect it*
 
