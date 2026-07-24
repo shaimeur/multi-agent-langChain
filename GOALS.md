@@ -57,7 +57,7 @@ after running it.
 | C2 | The 5 collaboration forms are demonstrable | `notebooks/02_agent_traces.ipynb` — one annotated run showing handoff, delegation (`needs_more_context`), repair loop, reviewer vote, `interrupt()` | [ ] |
 | C3 | Full RAG pipeline, ingestion → grounded generation | `uv run forge index data/target && uv run forge ask "where is X handled"` → answer with `file:line` citations; `uv run pytest evals/test_citations_resolve.py` | [ ] |
 | C4 | Short-term memory works | `scripts/c4_restart_resume.sh` — start a session, `docker compose restart api` mid-run, resume from the checkpoint and get the same thread back | [ ] |
-| C5 | Guardrails on input, output and tools | `uv run pytest evals/security -q` green, and `curl -s localhost:8000/v1/guardrails/events \| jq length` > 0 after a run | [ ] |
+| C5 | Guardrails on input, output and tools | `uv run pytest evals/security -q` green, and `curl -s localhost:8000/v1/guardrails/events \| jq length` > 0 after a run | **[x]** |
 | C6 | External tools connected | `uv run forge tools` lists 10, and `uv run pytest tests/test_tools.py -k count` asserts 10 bound. **MCP: see O2 — fix the criterion text before claiming this** | [ ] |
 | C7 | Working user interface | The 4-minute §15.6 script run end to end in the browser, screen-recorded to `docs/demo.mp4` | [ ] |
 | C8 | API exposed | `curl -s localhost:8000/openapi.json \| jq '.paths \| keys'` shows all §11 routes; `scripts/sse_smoke.sh` streams events | [ ] |
@@ -240,17 +240,19 @@ layers (`policy.path_escape`, `policy.command_denied`, `injection.override`,
 
 **C5 is half-closed:** the events half is proven; `uv run pytest evals/security -q` is D11's suite.
 
-### [ ] D11 · Red team and security suite
+### [x] D11 · Red team and security suite — DoD met (2026-07-24)
 
-- [ ] `evals/security/` — the ~25 §13.4 cases as pytest. Most need no LLM call at all
-- [ ] Sandbox escape cases: path traversal, symlink escape, `.env` / `.git/config` read, network egress, fork bomb, infinite loop, memory bomb, 10 GB stdout
-- [ ] Output cases: secret in generated code redacted at `sentinel_out`; fabricated citation detected and flagged
-- [ ] The poisoned-repo scenario end to end — plant the comment, watch the event fire, watch the task complete normally anyway
-- [ ] Fix what is fixable; **write down what is not** in `docs/limitations.md`
-- [ ] GitHub Actions workflow running the suite on push
+- [x] `evals/security/` — **32 cases** covering all twelve §13.4 attack classes, as pytest. None needs an LLM call. `attacks.py` is the corpus metadata, `test_security.py` attacks through the public surface, `conftest.py` derives the pass rate from the real pytest outcomes
+- [x] Sandbox/escape cases: path traversal, symlink escape (realpath), `.env` and `.git/config` reads, SSH key read, absolute-path escape, network egress, fork bomb, infinite loop, memory bomb, unbounded stdout, read-only rootfs. Plus command policy: curl, `bash -c`, `git push`, `git config core.pager`
+- [x] Output cases: secret redacted at `sentinel_out`, secret in a generated *patch* blocks the patch, fabricated citation dropped **and the answer's `grounded` flag dropped with it**
+- [x] The poisoned-repo scenario end to end — the comment is neutralised, the event fires, and the surrounding code survives so the task still completes
+- [x] Fixed what was fixable; **wrote down what was not** — `docs/limitations.md` §6 (direct injection is flagged, not blocked — a deviation from §13.4, argued) and §7 (injection tier 2 is not built)
+- [x] `.github/workflows/ci.yml` — lint, sandbox image build, full suite, security suite as its own step, pass rate to the job summary and uploaded as an artifact
 
 **DoD: the security suite is green — or knowingly, documentedly red — with a pass rate you can quote
-on a slide.**
+on a slide.** → **MET: 32/32 attacks mitigated, 0 breached, 2 deliberate deviations named in the
+report itself.** The number is computed from the pytest outcomes, so a slide cannot drift from the
+suite. `uv run pytest evals/security -q` → exit 0.
 
 ---
 

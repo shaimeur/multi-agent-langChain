@@ -1,0 +1,69 @@
+# CI — the full suite plus the adversarial security suite (cahier §13.4, D11).
+#
+# Everything runs offline: tests/conftest.py forces CACHE_MODE=replay, so a fixture
+# miss is a hard error rather than a silent network call. That is the same property
+# the demo depends on, which means CI failing on a missing fixture is CI doing its job.
+#
+# The security suite runs as its own step so its pass rate is legible in the log
+# rather than buried in a 300-test summary — the number is the deliverable.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Lint
+        run: uv run ruff check src tests evals
+
+      - name: Build the sandbox image
+        # Without it the sandbox degrades to the documented fallback and the
+        # container-only hardening cases skip. The runner has Docker, so build it and
+        # let those cases actually run.
+        run: docker build -f docker/sandbox.Dockerfile -t forge-sandbox:latest .
+
+      - name: Test suite
+        env:
+          CACHE_MODE: replay
+        run: uv run pytest
+
+      - name: Adversarial security suite (§13.4)
+        env:
+          CACHE_MODE: replay
+        run: uv run pytest evals/security -q
+
+      - name: Publish the security pass rate
+        if: always()
+        run: |
+          if [ -f evals/results/security.json ]; then
+            {
+              echo '### Adversarial suite (cahier §13.4)'
+              echo '```json'
+              cat evals/results/security.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the security report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: evals/results/security.json
+          if-no-files-found: ignore

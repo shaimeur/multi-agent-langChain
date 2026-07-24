@@ -124,5 +124,47 @@ but within it the §1 gaps all apply, and the api container does have network ac
 Uncomment the socket mount in `docker-compose.yml` only if you accept
 root-equivalent host access in exchange for per-run containers.
 
+## 6 — Direct injection is flagged, not blocked (a deviation from §13.4)
+
+**Where:** `src/forge/guardrails/sentinel_in.py` · **Since:** D10 · **Cases:** SEC-01, SEC-02
+
+Cahier §13.4 expects *"Injection directe → bloquée à `sentinel_in`, événement
+journalisé"*. FORGE logs the event and lets the turn proceed.
+
+The reason is that FORGE is a *coding assistant*, and "how would a prompt injection in
+this repo's comments affect you?" is a legitimate, on-topic engineering question. With
+tier-1 heuristics alone there is no way to separate a user *asking about* an override
+phrase from a user *issuing* one — that separation is exactly what §8.1's tier-2
+classifier exists to provide, and tier 2 is not built (§7 below). Blocking on the
+phrase would refuse a real question about the very attack the system defends against,
+which is a bad trade when the phrase is not what makes the attack work.
+
+What actually stops the attack is downstream and unaffected: retrieved content is
+spotlighted and stripped, and the tool and path whitelists are literal constants that
+no text — from a user or a repository — can widen. A model that *did* get confused by
+a user's phrasing still could not act on it.
+
+Reconsider if tier 2 lands: with a classifier able to score intent, blocking the
+high-confidence band becomes cheap and the flag-only posture stops being necessary.
+
+## 7 — Injection tier 2 is not built
+
+**Where:** `src/forge/guardrails/injection.py` · **Since:** D10
+
+§8.1 specifies three tiers: cheap heuristics → a DeBERTa-class classifier → an LLM
+judge on the ambiguous middle. Only tier 1 exists. `classify()` is the seam a tier 2
+would drop into.
+
+Two reasons, both measured or structural rather than preferential. A per-chunk
+transformer would run on **every chunk of every pack**; D4 measured a comparable
+cross-encoder taking p95 from 14 ms to 2589 ms on this CPU-only box, and that cost was
+already judged unacceptable once (the reranker ships off, descope §3). The judge tier
+needs a provider key, which is blocker B2.
+
+The consequence is a real one and is not hidden by the flag-only posture above: novel
+phrasings that no heuristic matches pass tier 1 undetected. The mitigations that do
+not depend on detection — spotlighting, instruction stripping of known patterns, and
+privilege invariance — are what carries the load in that case.
+
 <!-- Entries below this line are not sandbox-related. Add new ones with the same
      shape: where, since which day, and the gap stated plainly. -->
