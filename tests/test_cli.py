@@ -5,7 +5,7 @@ from __future__ import annotations
 from typer.testing import CliRunner
 
 from forge.cli.main import app
-from forge.config import LLMRole
+from forge.config import LLMRole, get_settings
 
 runner = CliRunner()
 
@@ -23,12 +23,19 @@ def test_config_reports_the_reranker_as_off():
     assert "eval harness only" in runner.invoke(app, ["config"]).stdout
 
 
-def test_unimplemented_commands_exit_nonzero_and_say_when():
-    """A stub that exits 0 would let a broken pipeline look green in CI."""
-    for command, args in [("fix", ["r"])]:
-        result = runner.invoke(app, [command, *args])
-        assert result.exit_code != 0, f"`forge {command}` must not report success"
-        assert "not implemented yet" in result.stdout
+def test_fix_without_a_configured_model_fails_readably(monkeypatch):
+    """`forge fix` is implemented (D12). With no provider key it must still fail the
+    way cahier §9 asks — a sentence naming the knob to turn, never a stack trace."""
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.setenv("GOOGLE_API_KEY", "")
+    get_settings.cache_clear()
+
+    result = runner.invoke(app, ["fix", "make add() return a + b"])
+
+    assert result.exit_code != 0, "`forge fix` must not report success"
+    assert "No usable model" in result.stdout
+    assert "LLM_PROVIDER=ollama" in result.stdout, "it names the way out"
+    assert "Traceback" not in result.stdout
 
 
 def test_ask_is_wired_and_handles_an_unindexed_repo():

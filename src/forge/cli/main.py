@@ -8,12 +8,15 @@ option. Commands are stubbed here and filled in as their subsystems land.
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import uuid
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.table import Table
 
 from forge.config import LLMRole, get_settings
@@ -240,15 +243,175 @@ async def _ask_graph(question: str, session_id: str) -> GroundedAnswer:
     return answer if isinstance(answer, GroundedAnswer) else GroundedAnswer(**answer)
 
 
+def _fix_step_line(node: str, delta: dict) -> str:
+    """One line of the change-path timeline. Mirrors `_step_line` for the Q&A graph."""
+    delta = delta or {}
+    if node == "planner":
+        plan = delta.get("plan")
+        steps = getattr(plan, "steps", []) or []
+        return f"[cyan]●[/] planner · {len(steps)} grounded step(s)"
+    if node == "regression":
+        red = delta.get("regression_red")
+        state = "[red]red[/] (reproduces the bug)" if red else "[yellow]green — pins nothing[/]"
+        return f"[cyan]●[/] tester · regression test {state}"
+    if node == "editor":
+        ok = delta.get("patch_ok")
+        return f"[cyan]●[/] editor · patch {'applies' if ok else '[red]does not apply[/]'}"
+    if node == "apply":
+        return "[cyan]●[/] apply · written to the worktree"
+    if node == "verify":
+        report = delta.get("report")
+        return f"[cyan]●[/] sandbox · {getattr(report, 'headline', lambda: '…')()}"
+    if node == "reviewer":
+        review = delta.get("review")
+        verdict = getattr(getattr(review, "verdict", None), "value", "…")
+        colour = "green" if verdict == "approve" else "yellow"
+        return f"[cyan]●[/] reviewer · [{colour}]{verdict}[/]"
+    if node == "escalate":
+        return "[yellow]●[/] escalated to you — the editor and reviewer keep disagreeing"
+    return f"[cyan]●[/] {node}"
+
+
+def _approval_prompt(payload: dict) -> bool:
+    """Render a §5.5 gate and ask. This is the human in human-in-the-loop."""
+    kind = payload.get("kind", "approval")
+    if kind == "plan_approval":
+        table = Table(box=None, padding=(0, 1))
+        table.add_column("#", style="dim")
+        table.add_column("file", style="cyan")
+        table.add_column("intent")
+        for index, step in enumerate(payload.get("steps", []), start=1):
+            table.add_row(str(index), step.get("target_path", ""), step.get("intent", ""))
+        console.print(Panel(table, title="Plan — approve?", border_style="yellow"))
+    elif kind == "patch_approval":
+        console.print(
+            Panel(
+                Syntax(payload.get("diff", ""), "diff", theme="ansi_dark", word_wrap=True),
+                title=f"Patch — {', '.join(payload.get('files', []))}",
+                border_style="yellow",
+            )
+        )
+    else:
+        console.print(Panel(str(payload), title=kind, border_style="yellow"))
+    return typer.confirm("Approve?", default=True)
+
+
+async def _run_fix(request: str, session_id: str) -> int:
+    """Drive the change graph, pausing at each gate to ask. Returns an exit code."""
+    from langchain_core.messages import HumanMessage
+    from langgraph.types import Command
+
+    from forge.config import LLMRole
+    from forge.core.checkpoint import sqlite_checkpointer
+    from forge.core.loop import build_change_graph
+    from forge.core.workspace import session_workspace
+    from forge.llm.provider import build_llm
+
+    settings = get_settings()
+    steps: list[str] = []
+
+    def panel() -> Panel:
+        grid = Table.grid(padding=(0, 1))
+        for line in steps or ["[dim]starting…[/]"]:
+            grid.add_row(line)
+        return Panel(grid, title=f"forge fix · session {session_id}", border_style="cyan")
+
+    try:
+        with console.status("Loading models..."):
+            planner = build_llm(LLMRole.REASONER, settings=settings)
+            coder = build_llm(LLMRole.CODER, settings=settings)
+    except Exception as error:
+        # Cahier §9: a missing key is a configuration problem, and the user should be
+        # told which knob to turn — not shown a pydantic validation dump.
+        console.print(
+            f"[red]No usable model for provider '{settings.llm_provider.value}'.[/]\n"
+            f"  {str(error).splitlines()[0][:160]}\n"
+            "  Set the provider's API key in .env, or use LLM_PROVIDER=ollama "
+            "for the offline profile."
+        )
+        return 1
+
+    config = {"configurable": {"thread_id": session_id}}
+    with session_workspace(session_id, settings=settings) as workspace:
+        async with sqlite_checkpointer(settings.checkpoint_db) as checkpointer:
+            graph = build_change_graph(
+                planner_llm=planner,
+                coder_llm=coder,
+                reviewer_llm=planner,
+                workspace=workspace,
+                settings=settings,
+                checkpointer=checkpointer,
+            )
+            payload: object = {
+                "messages": [HumanMessage(content=request)],
+                "session_id": session_id,
+            }
+
+            # Each pass runs until the graph ends or stops at a gate; an approval
+            # resumes it. The loop is bounded by the gates themselves — two of them.
+            for _ in range(6):
+                with Live(panel(), console=console, refresh_per_second=8) as live:
+                    async for update in graph.astream(
+                        payload, config=config, stream_mode="updates"
+                    ):
+                        for node, delta in update.items():
+                            if node == "__interrupt__":
+                                continue
+                            steps.append(_fix_step_line(node, delta))
+                            live.update(panel())
+
+                snapshot = await graph.aget_state(config)
+                pending = [
+                    t for t in getattr(snapshot, "tasks", ()) if getattr(t, "interrupts", None)
+                ]
+                if not pending:
+                    break
+                approved = _approval_prompt(pending[0].interrupts[0].value)
+                payload = Command(resume={"approved": approved})
+
+            final = (await graph.aget_state(config)).values
+
+        return _render_fix_result(final, workspace)
+
+
+def _render_fix_result(final: dict, workspace) -> int:
+    """Show the outcome. Returns the process exit code."""
+    halted = final.get("halted")
+    if halted:
+        console.print(f"\n[yellow]Stopped:[/] {halted}")
+        return 1
+
+    review = final.get("review")
+    report = final.get("report")
+    if review is not None:
+        console.print("\n[bold]Reviewer checklist[/]")
+        for check in getattr(review, "checks", []):
+            mark = "[green]✓[/]" if check.passed else "[red]✗[/]"
+            who = "code" if check.programmatic else "model"
+            console.print(f"  {mark} [dim]{who:>5}[/] {check.check.value} — {check.justification}")
+    if report is not None:
+        console.print(f"\n[bold]Tests:[/] {report.headline()}")
+
+    diff = subprocess.run(
+        ["git", "-C", str(workspace.path), "diff"], capture_output=True, text=True
+    ).stdout
+    if diff.strip():
+        console.print(Panel(Syntax(diff, "diff", theme="ansi_dark"), title="Verified diff"))
+    else:
+        console.print("[yellow]No change was produced.[/]")
+
+    approved = getattr(review, "approved", False)
+    return 0 if approved else 1
+
+
 @app.command()
-def fix(request: str = typer.Argument(..., help="Bug report or change request.")) -> None:
-    """Full plan → patch → test → review cycle (cahier 5.1). Lands D8."""
-    raise typer.Exit(_todo("fix", "D8 — the implement loop"))
-
-
-def _todo(command: str, when: str) -> int:
-    console.print(f"[yellow]`forge {command}` is not implemented yet.[/] Scheduled: {when}.")
-    return 1
+def fix(
+    request: str = typer.Argument(..., help="Bug report or change request."),
+    session: str = typer.Option("", "--session", "-s", help="Session id (resumes if it exists)."),
+) -> None:
+    """Full plan → patch → test → review cycle, with both approval gates (cahier §5.1)."""
+    session_id = session or f"fix-{uuid.uuid4().hex[:8]}"
+    raise typer.Exit(asyncio.run(_run_fix(request, session_id)))
 
 
 if __name__ == "__main__":

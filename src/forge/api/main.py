@@ -1,22 +1,30 @@
-"""FastAPI surface — cahier 11.
+"""FastAPI surface — cahier §11, the full route table.
 
-Health, plus the two retrieval routes that make FORGE a usable service today:
-``POST /v1/search`` (hybrid retrieval, no LLM) and ``POST /v1/ask`` (grounded
-answer with verified citations). The session, streaming and approval routes land
-with the graph (D5-D9) and the SSE layer (D12).
+Stateless retrieval (``/v1/search``, ``/v1/ask``) sits alongside the session routes
+that drive the graph: create a session, send it a message and watch the run stream
+back over SSE, approve at a §5.5 gate, replay the history, read the counters.
 
-Retrieval resources — the Qdrant client, the embedder, the BM25 encoder — are
-built once per process and shared across requests. Embedded Qdrant permits a
-single client handle per path, and rebuilding the embedder per request would
-reload the model weights every time; this is the shared-client pattern D3's
-STATE note calls for.
+The pairing that matters is ``/messages`` and ``/approve``. A message opens an SSE
+stream which ends in one of three terminal frames — ``done``, ``error``, or
+``interrupt``. The last means the graph hit a human gate and is checkpointed,
+waiting; ``/approve`` resumes it with ``Command(resume=...)``, and the client opens a
+new stream for what follows. That is what makes an approval survive a closed browser
+tab, or an hour, or a process restart.
+
+Retrieval resources — the Qdrant client, the embedder, the BM25 encoder — are built
+once per process and shared. Embedded Qdrant permits a single client handle per path,
+and rebuilding the embedder per request would reload the model weights every time.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from sse_starlette.sse import EventSourceResponse
 
+from forge.api.sessions import SessionInfo, SessionMetrics, Timer, get_store
+from forge.api.streaming import StreamEvent, graph_events
 from forge.config import Settings, get_settings
 from forge.guardrails.events import get_log
 from forge.guardrails.sentinel_in import check_input
@@ -32,6 +40,17 @@ app = FastAPI(
     description="Multi-agent engineering assistant — grounded code RAG, "
     "planned patches, sandbox-verified tests.",
     version="0.1.0",
+)
+
+# Open by default because the only client is the FORGE UI on another localhost port
+# and this service holds no cookie or ambient credential — every route is either
+# public or keyed by a session id the caller already has. Narrow it before this is
+# ever exposed beyond localhost.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 _resources: dict = {}
@@ -138,6 +157,270 @@ def search(request: SearchRequest) -> SearchResponse:
             )
             for h in hits
         ],
+    )
+
+
+# --- sessions and streaming (cahier §11) ----------------------------------
+
+# The graph a session runs, injectable so tests can supply a scripted one and so a
+# key-less machine fails at *build* time with a typed error rather than mid-stream.
+_graph_factory = None
+
+
+def set_graph_factory(factory) -> None:
+    """Override how a session's graph is built. ``factory(session, settings)``."""
+    global _graph_factory
+    _graph_factory = factory
+
+
+def _build_graph(session, settings: Settings, checkpointer):
+    if _graph_factory is not None:
+        return _graph_factory(session, settings, checkpointer)
+    from forge.config import LLMRole
+    from forge.core.loop import build_change_graph
+    from forge.llm.provider import build_llm
+
+    return build_change_graph(
+        planner_llm=build_llm(LLMRole.REASONER, settings=settings),
+        coder_llm=build_llm(LLMRole.CODER, settings=settings),
+        reviewer_llm=build_llm(LLMRole.REASONER, settings=settings),
+        workspace=session.workspace,
+        settings=settings,
+        checkpointer=checkpointer,
+    )
+
+
+class CreateSession(BaseModel):
+    session_id: str | None = None
+    """Supply one to resume a known thread; omit for a fresh id."""
+
+
+@app.post("/v1/sessions", response_model=SessionInfo, status_code=201, tags=["sessions"])
+def create_session(request: CreateSession | None = None) -> SessionInfo:
+    """Create a session and its git worktree (cahier §11)."""
+    settings = get_settings()
+    try:
+        session = get_store(settings).create(request.session_id if request else None)
+    except Exception as error:  # a worktree that cannot be made is a 400, not a 500
+        raise HTTPException(
+            status_code=400, detail=f"could not create a workspace: {error}"
+        ) from error
+    return session.info()
+
+
+@app.get("/v1/sessions", response_model=list[SessionInfo], tags=["sessions"])
+def list_sessions() -> list[SessionInfo]:
+    return [session.info() for session in get_store(get_settings()).list()]
+
+
+@app.delete("/v1/sessions/{session_id}", status_code=204, tags=["sessions"])
+def close_session(session_id: str) -> None:
+    """Remove the worktree. The conversation survives in the checkpointer."""
+    if not get_store(get_settings()).close(session_id):
+        raise HTTPException(status_code=404, detail=f"no such session: {session_id}")
+
+
+def _require_session(session_id: str):
+    session = get_store(get_settings()).get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail=f"no such session: {session_id}")
+    return session
+
+
+class MessageRequest(BaseModel):
+    message: str
+
+
+@app.post("/v1/sessions/{session_id}/messages", tags=["sessions"])
+async def send_message(session_id: str, request: MessageRequest):
+    """Send a message; the run streams back as SSE (cahier §11).
+
+    The stream is the response — there is no JSON body to wait for. It ends on
+    ``done``, ``error``, or ``interrupt``; the last means a §5.5 gate is waiting and
+    the caller should POST to ``/approve``.
+    """
+    from langchain_core.messages import HumanMessage
+
+    session = _require_session(session_id)
+    settings = get_settings()
+
+    decision = check_input(request.message, session_id=session_id, settings=settings)
+    if not decision:
+        session.metrics.errors += 1
+        raise HTTPException(status_code=400, detail=decision.reason)
+
+    config = {"configurable": {"thread_id": session_id}}
+    payload = {
+        "messages": [HumanMessage(content=decision.text)],
+        "session_id": session_id,
+    }
+
+    async def stream():
+        from forge.core.checkpoint import sqlite_checkpointer
+
+        with Timer() as timer:
+            try:
+                async with sqlite_checkpointer(settings.checkpoint_db) as checkpointer:
+                    graph = _build_graph(session, settings, checkpointer)
+                    async for event in graph_events(graph, payload, config):
+                        yield event.sse()
+            except Exception as error:  # noqa: BLE001 — build failures end the stream typed
+                session.metrics.errors += 1
+                yield StreamEvent(
+                    type="error", data={"message": f"{type(error).__name__}: {error}"[:500]}
+                ).sse()
+        session.metrics.record_turn(duration_ms=timer.ms)
+
+    return EventSourceResponse(stream())
+
+
+class ApproveRequest(BaseModel):
+    approved: bool = True
+    feedback: str = ""
+
+
+@app.post("/v1/sessions/{session_id}/approve", tags=["sessions"])
+async def approve(session_id: str, request: ApproveRequest):
+    """Resume after an ``interrupt()`` — the §5.5 gates' HTTP surface.
+
+    Resumes with ``Command(resume=...)`` and streams whatever follows, so approving a
+    plan flows straight into the run it unblocks.
+    """
+    from langgraph.types import Command
+
+    session = _require_session(session_id)
+    settings = get_settings()
+    config = {"configurable": {"thread_id": session_id}}
+    resume = Command(resume={"approved": request.approved, "feedback": request.feedback})
+
+    async def stream():
+        from forge.core.checkpoint import sqlite_checkpointer
+
+        with Timer() as timer:
+            try:
+                async with sqlite_checkpointer(settings.checkpoint_db) as checkpointer:
+                    graph = _build_graph(session, settings, checkpointer)
+                    async for event in graph_events(graph, resume, config):
+                        yield event.sse()
+            except Exception as error:  # noqa: BLE001
+                session.metrics.errors += 1
+                yield StreamEvent(
+                    type="error", data={"message": f"{type(error).__name__}: {error}"[:500]}
+                ).sse()
+        session.metrics.record_turn(duration_ms=timer.ms)
+
+    return EventSourceResponse(stream())
+
+
+class HistoryTurn(BaseModel):
+    role: str
+    content: str
+
+
+class SessionHistory(BaseModel):
+    session_id: str
+    messages: list[HistoryTurn] = Field(default_factory=list)
+    awaiting_approval: bool = False
+    halted: str = ""
+
+
+@app.get("/v1/sessions/{session_id}/history", response_model=SessionHistory, tags=["sessions"])
+async def history(session_id: str) -> SessionHistory:
+    """Replay the conversation from the checkpointer (cahier §11).
+
+    Read from the checkpoint rather than from memory, so it works after a restart —
+    which is the whole point of persisting it.
+    """
+    from forge.core.checkpoint import sqlite_checkpointer
+
+    settings = get_settings()
+    config = {"configurable": {"thread_id": session_id}}
+    async with sqlite_checkpointer(settings.checkpoint_db) as checkpointer:
+        snapshot = await checkpointer.aget_tuple(config)
+
+    if snapshot is None:
+        return SessionHistory(session_id=session_id)
+    values = snapshot.checkpoint.get("channel_values", {})
+    messages = []
+    for message in values.get("messages", []) or []:
+        content = getattr(message, "content", "")
+        role = getattr(message, "type", "") or message.__class__.__name__
+        messages.append(HistoryTurn(role=str(role), content=str(content)))
+    return SessionHistory(
+        session_id=session_id,
+        messages=messages,
+        awaiting_approval=bool(values.get("approvals") is not None and snapshot.metadata),
+        halted=str(values.get("halted", "") or ""),
+    )
+
+
+# --- indexing (cahier §11) -------------------------------------------------
+
+
+class IndexRequest(BaseModel):
+    path: str | None = None
+    incremental: bool = True
+
+
+class IndexAccepted(BaseModel):
+    status: str
+    path: str
+    incremental: bool
+
+
+@app.post("/v1/index", response_model=IndexAccepted, status_code=202, tags=["ops"])
+def start_index(request: IndexRequest, background: BackgroundTasks) -> IndexAccepted:
+    """Kick off an indexing run in the background (202, not 200 — it is not done).
+
+    Folded into ``api`` rather than a separate indexer service: descope §5 dropped
+    that container, and a background task is what replaced it.
+    """
+    settings = get_settings()
+    target = request.path or str(settings.target_repo)
+
+    def run_index() -> None:
+        from pathlib import Path
+
+        from forge.rag.ingest import index_repo
+
+        # `full` is the inverse of `incremental`: the default reindexes only what the
+        # git diff touched, which is the §14/J2 2 s reindex the CLI already relies on.
+        index_repo(Path(target), settings=settings, full=not request.incremental)
+
+    background.add_task(run_index)
+    return IndexAccepted(status="accepted", path=target, incremental=request.incremental)
+
+
+# --- metrics (cahier §11) --------------------------------------------------
+
+
+class MetricsResponse(BaseModel):
+    sessions: int
+    totals: SessionMetrics
+    per_session: dict[str, SessionMetrics] = Field(default_factory=dict)
+    guardrail_events: int = 0
+
+
+@app.get("/v1/metrics", response_model=MetricsResponse, tags=["ops"])
+def metrics(session_id: str | None = None) -> MetricsResponse:
+    """Cost, latency and token counters — per session, and summed."""
+    store_ = get_store(get_settings())
+    sessions = [s for s in store_.list() if session_id is None or s.session_id == session_id]
+
+    totals = SessionMetrics()
+    for session in sessions:
+        totals.turns += session.metrics.turns
+        totals.llm_calls += session.metrics.llm_calls
+        totals.tokens += session.metrics.tokens
+        totals.errors += session.metrics.errors
+        totals.latency_ms_total += session.metrics.latency_ms_total
+        totals.latency_ms_last = session.metrics.latency_ms_last or totals.latency_ms_last
+
+    return MetricsResponse(
+        sessions=len(sessions),
+        totals=totals,
+        per_session={s.session_id: s.metrics for s in sessions},
+        guardrail_events=get_log(get_settings()).count(session_id=session_id),
     )
 
 

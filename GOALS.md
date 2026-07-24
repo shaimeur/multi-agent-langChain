@@ -60,7 +60,7 @@ after running it.
 | C5 | Guardrails on input, output and tools | `uv run pytest evals/security -q` green, and `curl -s localhost:8000/v1/guardrails/events \| jq length` > 0 after a run | **[x]** |
 | C6 | External tools connected | `uv run forge tools` lists 10, and `uv run pytest tests/test_tools.py -k count` asserts 10 bound. **MCP: see O2 — fix the criterion text before claiming this** | [ ] |
 | C7 | Working user interface | The 4-minute §15.6 script run end to end in the browser, screen-recorded to `docs/demo.mp4` | [ ] |
-| C8 | API exposed | `curl -s localhost:8000/openapi.json \| jq '.paths \| keys'` shows all §11 routes; `scripts/sse_smoke.sh` streams events | [ ] |
+| C8 | API exposed | `curl -s localhost:8000/openapi.json \| jq '.paths \| keys'` shows all §11 routes; `scripts/sse_smoke.sh` streams events | **[x]** |
 | C9 | Containerised deployment | `scripts/clean_machine_test.sh` — fresh clone into an empty dir, `cp .env.example .env && docker compose up`, all healthchecks green, on a machine that has never seen the project | [ ] |
 | C10 | Deliverables complete | L1 cahier · L2 repo+README+requirements.txt+ADRs+evaluation.md+limitations.md · L3 two notebooks · L4 Dockerfiles+compose · L5 live demo + video · L6 12 slides | [ ] |
 
@@ -258,15 +258,23 @@ suite. `uv run pytest evals/security -q` → exit 0.
 
 ## Sprint 4 — Interfaces (D12–D13)
 
-### [ ] D12 · FastAPI surface + CLI
+### [ ] D12 · FastAPI surface + CLI — DoD met (2026-07-24), `forge review` carried
 
-- [ ] All §11 routes: `POST /v1/sessions`, `POST /v1/sessions/{id}/messages`, `GET .../history`, `POST .../approve`, `POST /v1/index`, `GET /v1/guardrails/events`, `GET /v1/metrics`
-- [ ] SSE streaming of LangGraph events with `stream_mode=["updates","messages"]`, typed error handling, CORS
-- [ ] Cost, latency and token counters behind `/v1/metrics`, accumulated per session
-- [ ] `forge fix` and `forge review` finished, with the Rich live agent-activity panel
-- [ ] `scripts/sse_smoke.sh` + an OpenAPI route check (this is the **C8** proof)
+- [x] All §11 routes — `POST /v1/sessions` (+ `GET`, `DELETE`), `POST .../messages` (SSE), `GET .../history` (replayed from the checkpointer, so it survives a restart), `POST .../approve`, `POST /v1/index` (202 background task — descope §5 folded the indexer service into `api`), `/v1/guardrails/events`, `/v1/metrics`, `/v1/health`
+- [x] SSE with `stream_mode=["updates","messages"]` normalised into four typed frames (`node`/`token`/`interrupt`/`done`/`error`) so a client never parses LangGraph's tuples. Every stream ends with a terminal frame — a stream that stops without saying why is indistinguishable from a dropped connection. CORS configured
+- [x] Per-session cost/latency/token counters behind `/v1/metrics`, scoped or summed, with guardrail-event counts alongside
+- [x] `forge fix` — the change graph with a Rich live timeline, both §5.5 gates rendered as prompts (a plan table, a syntax-highlighted diff), the five-point checklist and the verified diff at the end. A missing key fails with a sentence naming the fix, not a pydantic dump (§9)
+- [x] `scripts/sse_smoke.sh` — **all checks pass**: the §11 route table, session lifecycle, SSE framing with a terminal frame, guardrail events, metrics. Uses curl + jq, so it proves the surface from outside the process
+- [ ] `forge review` — **carried.** `forge fix` already renders the reviewer's checklist; a standalone review-only command wants a real model to be worth anything (B2)
 
-**DoD: the complete workflow is drivable from the terminal with streamed output.**
+**DoD: the complete workflow is drivable from the terminal with streamed output.** → **MET.**
+`uv run pytest` → **340 passed, 5 skipped, exit 0**; `./scripts/sse_smoke.sh` → exit 0.
+**C8 closes.** On a key-less machine the streamed run ends in a typed `error` frame (B2) — the
+channel and framing are proven; a full multi-frame run is proven in tests with a scripted graph.
+
+**Found on the way:** `build_llm` installs a *process-global* LangChain cache and never removed it,
+so any test touching a real provider silently routed every later `FakeListChatModel` through the
+fixture store — a FixtureMiss in an unrelated file. `reset_llm_cache()` + an autouse fixture close it.
 
 ### [ ] D13 · Web UI — *Streamlit pending O1*
 

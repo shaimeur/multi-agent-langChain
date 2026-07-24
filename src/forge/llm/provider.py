@@ -38,6 +38,21 @@ def _install_cache() -> None:
         _cache_installed = True
 
 
+def reset_llm_cache() -> None:
+    """Uninstall the process-global LangChain cache.
+
+    It is global state that ``build_llm`` installs as a side effect, so once *any*
+    code path builds a real model every later model call in the process goes through
+    the fixture cache — including a ``FakeListChatModel`` in a test that never asked
+    for one, which then fails with a FixtureMiss for a prompt nobody recorded.
+    tests/conftest.py calls this between tests so the leak cannot cross a test
+    boundary; nothing in the application needs it.
+    """
+    global _cache_installed
+    set_llm_cache(None)
+    _cache_installed = False
+
+
 def build_llm(
     role: LLMRole,
     *,

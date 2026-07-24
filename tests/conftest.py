@@ -41,3 +41,20 @@ def _reset_cache_singleton():
     reset_cache()
     yield
     reset_cache()
+
+
+@pytest.fixture(autouse=True)
+def _reset_global_llm_cache():
+    """`build_llm` installs a process-global LangChain cache and never removes it.
+
+    Any test that builds a real model — or invokes a CLI command that does — would
+    otherwise leave it installed, and every later test's FakeListChatModel would be
+    routed through the fixture store and fail on a prompt nobody recorded. The
+    symptom is a FixtureMiss in a completely unrelated file, which is a miserable
+    thing to debug, so the leak is closed here rather than left to ordering luck.
+    """
+    from forge.llm.provider import reset_llm_cache
+
+    reset_llm_cache()
+    yield
+    reset_llm_cache()
