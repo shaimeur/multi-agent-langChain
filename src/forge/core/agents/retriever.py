@@ -19,6 +19,8 @@ from qdrant_client import QdrantClient
 from forge.config import Settings
 from forge.core.agents.base import latest_user_text
 from forge.core.state import ForgeState
+from forge.guardrails.events import get_log
+from forge.guardrails.injection import scan_chunks
 from forge.rag import store
 from forge.rag.embed import Embedder
 from forge.rag.pack import DEFAULT_TOKEN_BUDGET, load_groups, pack_context
@@ -57,6 +59,15 @@ def make_retriever_node(
         if groups is None:
             groups = load_groups(client, collection)
         pack = pack_context(hits, groups=groups, token_budget=token_budget, queries=[question])
+
+        # §8.2 — this is where third-party text enters the prompt, so this is where
+        # the indirect-injection scan belongs. Every chunk is scanned and neutralised
+        # *before* the pack reaches the planner or the answerer; each finding is an
+        # event, and a clean chunk is logged as clean.
+        safe_chunks, _ = scan_chunks(
+            pack.chunks, session_id=state.get("session_id", ""), log=get_log(settings)
+        )
+        pack = pack.model_copy(update={"chunks": safe_chunks})
 
         seen = {c.chunk_id for c in state.get("chunks", [])}
         fresh = [c for c in pack.chunks if c.chunk_id not in seen]

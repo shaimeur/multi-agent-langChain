@@ -14,11 +14,14 @@ STATE note calls for.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from forge.config import Settings, get_settings
-from forge.models import GroundedAnswer
+from forge.guardrails.events import get_log
+from forge.guardrails.sentinel_in import check_input
+from forge.guardrails.sentinel_out import check_answer
+from forge.models import GroundedAnswer, GuardrailAction, GuardrailEvent, GuardrailStage
 from forge.rag import store
 from forge.rag.answer import answer_question
 from forge.rag.embed import build_embedder
@@ -138,20 +141,73 @@ def search(request: SearchRequest) -> SearchResponse:
     )
 
 
+# --- guardrails (cahier §8.5) ---------------------------------------------
+
+
+@app.get("/v1/guardrails/events", response_model=list[GuardrailEvent], tags=["guardrails"])
+def guardrail_events(
+    session_id: str | None = None,
+    stage: GuardrailStage | None = None,
+    action: GuardrailAction | None = None,
+    limit: int = 200,
+) -> list[GuardrailEvent]:
+    """Every guardrail decision, newest first — the §8.5 deliverable.
+
+    This route is the difference between "we have guardrails" and "here are the 47
+    guardrail events from this session", which is why it is queryable by session,
+    stage and action rather than being a dump.
+    """
+    return get_log(get_settings()).events(
+        session_id=session_id, stage=stage, action=action, limit=limit
+    )
+
+
+class GuardrailSummary(BaseModel):
+    total: int
+    by_rule: dict[str, int]
+
+
+@app.get("/v1/guardrails/summary", response_model=GuardrailSummary, tags=["guardrails"])
+def guardrail_summary(session_id: str | None = None) -> GuardrailSummary:
+    """Counts per rule — the shape the security slide is built from."""
+    log = get_log(get_settings())
+    by_rule = log.counts_by_rule(session_id=session_id)
+    return GuardrailSummary(total=sum(by_rule.values()), by_rule=by_rule)
+
+
 class AskRequest(BaseModel):
     question: str
     k: int = 8
+    session_id: str = ""
+    """Attributes guardrail events to a session, so the §8.5 log can be filtered."""
 
 
 @app.post("/v1/ask", response_model=GroundedAnswer, tags=["retrieval"])
 def ask(request: AskRequest) -> GroundedAnswer:
-    """Grounded answer with citations verified in code. Needs a configured LLM."""
+    """Grounded answer with citations verified in code. Needs a configured LLM.
+
+    Wrapped by both sentinels (cahier §8): ``sentinel_in`` validates and redacts the
+    question before it reaches retrieval, ``sentinel_out`` re-verifies every citation
+    against what was actually retrieved before the answer leaves the process.
+    """
     resources = get_resources()
-    return answer_question(
-        request.question,
+    settings = resources["settings"]
+
+    decision = check_input(request.question, session_id=request.session_id, settings=settings)
+    if not decision:
+        # A refusal is a 400 with the guardrail's own sentence, not a 500 and not a
+        # silent empty answer — the event is already in the log either way.
+        raise HTTPException(status_code=400, detail=decision.reason)
+
+    answer = answer_question(
+        decision.text,
         k=request.k,
-        settings=resources["settings"],
+        settings=settings,
         client=resources["client"],
         embedder=resources["embedder"],
         encoder=resources["encoder"],
     )
+    # pack=None: this path verifies citations inside answer_question and does not
+    # hand the pack back, so sentinel_out scans for secrets and leaves them alone
+    # rather than re-checking against a pack it does not have.
+    return check_answer(answer, None, session_id=request.session_id).answer

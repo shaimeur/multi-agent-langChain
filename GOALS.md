@@ -223,17 +223,22 @@ allowlist scoped to `forge.models` + `Budget`. Also future-proofs C4 and D9 resu
 
 ## Sprint 3 — Guardrails and hardening (D10–D11)
 
-### [ ] D10 · Guardrails
+### [ ] D10 · Guardrails — DoD met (2026-07-24), tier 2 carried
 
-- [ ] `guardrails/policy.py` — path whitelist confined to the session worktree, **`os.path.realpath` before every check**, command whitelist (never a blacklist), per-tool timeouts. Deterministic, pre-LLM
-- [ ] `guardrails/sentinel_in.py` — Pydantic schema + size limits, in-process rate limit (no Redis, cut-list item 1 already taken), secret scan on user input, cheap heuristic injection rules
-- [ ] Injection tier 2: classifier over the heuristics, LLM judge only on the ambiguous middle
-- [ ] `guardrails/injection.py` — spotlighting (`<untrusted_context>` wrapper), instruction stripping on retrieved chunks, privilege invariance: retrieved text can never alter tool permissions or path policy
-- [ ] `guardrails/sentinel_out.py` — schema revalidation, `git apply --check`, citation verification, secret redaction on generated code
-- [ ] `guardrail_events` table in the checkpoint SQLite file + `GET /v1/guardrails/events`
+- [x] `guardrails/policy.py` — path whitelist confined to the session worktree, **`os.path.realpath` before every check** (a symlink out is refused, tested), command whitelist of exactly five, `.git`/`.env`/`.ssh` refused even *inside* the tree, git restricted to read-only + apply verbs. Deterministic, pre-LLM. *Per-tool timeouts already live in the D7 sandbox runner, not here*
+- [x] `guardrails/sentinel_in.py` — size cap (refuse, never truncate — truncating an attack leaves an attack), in-process sliding-window rate limit (Redis cut, and the per-worker/per-restart consequence is written down), 6 credential shapes redacted, tier-1 injection heuristics
+- [ ] **Injection tier 2 — carried.** `classify()` is the seam; the DeBERTa tier is not built. Argued: it would run per-chunk per-pack on a CPU-only box where D4 measured a cross-encoder at 14 ms → 2589 ms p95, and the judge tier needs the key B2 blocks. **Raise with the human** — recorded under open decisions in STATE.md, not silently taken
+- [x] `guardrails/injection.py` — spotlighting, instruction stripping (the code around the injection survives; chunks are copied, never mutated, so citations still resolve), base64 payload decoding, **privilege invariance asserted structurally** — the whitelists are literal constants with no code path from a retrieved string to a permission
+- [x] `guardrails/sentinel_out.py` — citation re-verification against the ContextPack, secret redaction on generated answers *and* on generated patches, unappliable diffs blocked. Dropping the last citation drops `grounded` with it
+- [x] `guardrail_events` table in the checkpoint SQLite + `GET /v1/guardrails/events` and `/summary`, filterable by session/stage/action
+- [x] **Wired, not merely importable** — `scan_chunks` runs in the retriever node where third-party text enters the prompt; `check_input`/`check_answer` wrap `POST /v1/ask`
 
-**DoD: every guardrail emits a logged, queryable event — "here are the 47 guardrail events from this
-session", not "we have guardrails".**
+**DoD: every guardrail emits a logged, queryable event.** → **MET**, proven the way C5 asks for it —
+live server, `curl .../v1/guardrails/events?session_id=demo | jq length` → **5**, spanning all three
+layers (`policy.path_escape`, `policy.command_denied`, `injection.override`,
+`injection.exfiltration`, `input.clean`). `uv run pytest` → **322 passed, 5 skipped, exit 0**.
+
+**C5 is half-closed:** the events half is proven; `uv run pytest evals/security -q` is D11's suite.
 
 ### [ ] D11 · Red team and security suite
 

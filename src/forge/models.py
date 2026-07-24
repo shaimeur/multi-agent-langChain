@@ -536,3 +536,62 @@ class ReviewVerdict(BaseModel):
         reasons = "; ".join(f"{c.check.value}: {c.justification}" for c in self.failed())
         revision.reason = reasons or revision.reason or "the reviewer rejected the patch"
         return revision
+
+
+# --- guardrails (cahier §8) -----------------------------------------------
+
+
+class GuardrailStage(StrEnum):
+    """Which of the three layers raised an event (cahier §8: "trois couches")."""
+
+    SENTINEL_IN = "sentinel_in"
+    """Input validation — size, secrets, injection heuristics, scope."""
+    INJECTION = "injection"
+    """Indirect injection on *retrieved* content — §8.2, the real attack surface."""
+    POLICY = "policy"
+    """The deterministic pre-LLM tool and filesystem policy — §8.3."""
+    SENTINEL_OUT = "sentinel_out"
+    """Output validation — citations, secrets in generated code, diff applicability."""
+
+
+class GuardrailAction(StrEnum):
+    """What was *done*, which is the part that makes an event auditable.
+
+    ``ALLOWED`` is logged as deliberately as ``BLOCKED``: §8.5's whole point is being
+    able to say "here are the 47 guardrail events from this session", and a log that
+    only records refusals cannot show that a check ran at all on a clean run.
+    """
+
+    ALLOWED = "allowed"
+    FLAGGED = "flagged"
+    """Suspicious, recorded, permitted through — the tier-1 heuristic's usual verdict."""
+    REDACTED = "redacted"
+    """The content was modified before use: a stripped instruction, a masked secret."""
+    BLOCKED = "blocked"
+
+
+class GuardrailEvent(BaseModel):
+    """One guardrail decision (cahier §8.1: rule id, score, action).
+
+    Deliberately flat and boring — it is a log row, and it is queried far more often
+    than it is constructed. ``rule`` is a stable dotted id (``injection.override``)
+    rather than a prose message, so events can be counted and grouped rather than
+    only read.
+    """
+
+    session_id: str = ""
+    stage: GuardrailStage
+    rule: str
+    """Stable dotted id, e.g. ``policy.path_escape``. Never free text."""
+    action: GuardrailAction
+    score: float = 0.0
+    """Confidence, where a rule has one. Heuristics use 1.0; a judge uses its own."""
+    detail: str = ""
+    """One human-readable line. Truncated on write — never the offending payload."""
+    target: str = ""
+    """What it was about: a path, a chunk_id, a tool name."""
+    created_at: str = ""
+
+    @property
+    def blocked(self) -> bool:
+        return self.action is GuardrailAction.BLOCKED
