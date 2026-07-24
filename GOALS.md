@@ -197,17 +197,27 @@ behind a profile; it deliberately does **not** mount the Docker socket — limit
 passed, 5 skipped**). Real-model repair quality is **B2-gated** and unproven — same split as D6. The
 swe_mini benchmark is built and self-verified but has not yet been run against a model.
 
-### [ ] D9 · Reviewer + human-in-the-loop
+### [x] D9 · Reviewer + human-in-the-loop — DoD met (2026-07-24)
 
-- [ ] `core/agents/reviewer.py` — the fixed 5-point checklist, each point returning a boolean *and* its justification. Different model family from the Editor (until cut-list item 6 is taken)
-- [ ] Grounding check runs **in code**: every cited `file:line` resolves into the ContextPack via `ContextPack.supports()`. The LLM's opinion is not consulted
-- [ ] `APPROVE` / `REVISE(feedback, target_step)` schema and the routing it drives
-- [ ] `interrupt()` at plan approval and again before any patch touches disk; resume via `Command(resume=...)`
-- [ ] Supervisor loop-pathology detection — Editor and Reviewer disagreeing 3× on the same file escalates to the human instead of burning budget
-- [ ] Budget exhaustion returns a graceful partial answer, never a stack trace
-- [ ] Headless end-to-end run through both approval points, scripted
+- [x] `core/agents/reviewer.py` — the fixed 5-point checklist, each point a boolean **and** its justification, plus `programmatic` recording *who decided it*. **Three of the five never reach a model**: it is handed a `ReviewJudgement` schema with fields for points 2 and 5 only, so "the tests passed" is not a claim it is able to make. Editor/reviewer family split is `LLMRole.CODER` vs `REASONER`; `shares_family_with_editor()` reports when one provider collapses them rather than implying otherwise
+- [x] Grounding runs **in code** against the ContextPack — a citation that was never retrieved fails point 1 regardless of the model's opinion
+- [x] `Verdict.APPROVE`/`REVISE` + `ReviewVerdict(checks, feedback, target_step)`, and the routing it drives. `as_revision()` hands the EDITOR each failed point *with its justification* — "the patch did not apply to the worktree" is actionable, "plan_conformance" alone is not
+- [x] `interrupt()` at plan approval **and before any patch touches disk**, resumed with `Command(resume=...)`. The patch gate sits between `editor` (build + `git apply --check`) and `apply` (the only node that writes), so rejecting needs no rollback — nothing has happened yet. Resume values are parsed defensively: only an explicit yes approves
+- [x] Loop-pathology detection — three disagreements on the same file route to `escalate`, which asks the human, rather than silently ending like the iteration cap
+- [x] Budget exhaustion sets `halted` with a readable sentence; no path returns a traceback
+- [x] Headless end-to-end through both approval points — `test_the_full_graph_runs_headless_through_both_approval_points`
 
-**DoD: the full graph runs end to end headless with two human approval points.**
+**DoD: the full graph runs end to end headless with two human approval points.** → **MET.**
+Traced: pause 1 `plan_approval` (nothing on disk) → pause 2 `patch_approval` (still nothing on disk,
+diff shown) → applied, green, all five checks reported with who decided each.
+`uv run pytest` → **265 passed, 5 skipped, exit 0**; `ruff check src tests evals` → exit 0.
+Real-model *judgement quality* on points 2 and 5 stays B2-gated — the graph is proven, the critic is not.
+
+**Found on the way (security, not on the D9 list):** LangGraph's default checkpoint serializer
+reconstructs any type named in a checkpoint — its own docstring notes that anyone able to write to
+the checkpoint DB may thereby trigger code execution. `core/checkpoint.py` now runs it strict with an
+allowlist scoped to `forge.models` + `Budget`. Also future-proofs C4 and D9 resume, which the coming
+"blocked in a future version" change would otherwise break.
 
 ---
 

@@ -241,6 +241,10 @@ class ChangePlan(BaseModel):
 
     summary: str = ""
     steps: list[PlanStep] = Field(default_factory=list)
+    blast_radius: list[str] = Field(default_factory=list)
+    """Other files the change probably touches (cahier §4/A2). The REVIEWER's
+    regression-risk check is asked against this list, so a plan that declares a wide
+    blast radius and then edits one file is exactly what point 5 exists to catch."""
     needs_more_context: bool = False
     missing: str = ""
 
@@ -445,3 +449,90 @@ class RevisionRequest(BaseModel):
         if self.stderr_tail.strip():
             lines.append(f"\nstderr tail:\n{self.stderr_tail.strip()}")
         return "\n".join(lines)
+
+
+# --- review (cahier §4/A5) ------------------------------------------------
+
+
+class ReviewCheckId(StrEnum):
+    """The five fixed points of the REVIEWER's checklist. Fixed on purpose: a
+    reviewer that picks its own criteria each run cannot be held to any of them."""
+
+    GROUNDING = "grounding"
+    """Every cited file:line resolves into the ContextPack. Checked in code."""
+    PLAN_CONFORMANCE = "plan_conformance"
+    """The patch implements the planned step, and *only* that step."""
+    TESTS = "tests"
+    """They really ran and really passed. Read from the report, not argued about."""
+    SECURITY = "security"
+    """No hardcoded secret, no eval/exec, no new egress, no dependency, no deleted test."""
+    REGRESSION_RISK = "regression_risk"
+    """Something in the plan's blast_radius left untouched that should not have been."""
+
+
+class ReviewCheck(BaseModel):
+    """One checklist point: a boolean *and* the reason for it (cahier §4/A5).
+
+    ``programmatic`` records whether code or a model decided this. Three of the five
+    points are settled in code and the model is never asked about them — a reviewer
+    that could be talked out of "the tests failed" is not a quality barrier, and the
+    cahier's own line is that tests are the one oracle that cannot be persuaded.
+    """
+
+    check: ReviewCheckId
+    passed: bool
+    justification: str = ""
+    programmatic: bool = False
+
+
+class Verdict(StrEnum):
+    APPROVE = "approve"
+    REVISE = "revise"
+
+
+class ReviewJudgement(BaseModel):
+    """The *only* thing the reviewer model is asked for — the two points that need
+    judgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it
+    structurally impossible for the model to answer the programmatic three."""
+
+    plan_conformance: bool = False
+    plan_conformance_why: str = ""
+    regression_risk_ok: bool = False
+    regression_risk_why: str = ""
+
+
+class ReviewVerdict(BaseModel):
+    """The REVIEWER's output: APPROVE, or REVISE with actionable feedback.
+
+    Named as cahier §5.4 names the state field. ``target_step`` is an index rather
+    than the spec's string id because ``PlanStep`` has no id in the built schema —
+    the index is what the EDITOR actually needs to re-enter the right step.
+    """
+
+    verdict: Verdict = Verdict.REVISE
+    checks: list[ReviewCheck] = Field(default_factory=list)
+    feedback: list[str] = Field(default_factory=list)
+    target_step: int = 0
+
+    @property
+    def approved(self) -> bool:
+        return self.verdict is Verdict.APPROVE
+
+    def failed(self) -> list[ReviewCheck]:
+        return [c for c in self.checks if not c.passed]
+
+    def as_revision(self, report: ExecutionReport | None = None) -> RevisionRequest:
+        """The verdict as the EDITOR's next brief, keeping the test evidence attached.
+
+        Each failed point travels with its *justification*, not just its name: "the
+        patch did not apply to the worktree" is something an editor can act on, and
+        "plan_conformance" on its own is not.
+        """
+        revision = (
+            RevisionRequest.from_report(report, target_step=self.target_step)
+            if report is not None and not report.ok
+            else RevisionRequest(target_step=self.target_step)
+        )
+        reasons = "; ".join(f"{c.check.value}: {c.justification}" for c in self.failed())
+        revision.reason = reasons or revision.reason or "the reviewer rejected the patch"
+        return revision

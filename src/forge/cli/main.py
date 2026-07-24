@@ -204,8 +204,8 @@ def _step_line(node: str, delta: dict) -> str:
 async def _ask_graph(question: str, session_id: str) -> GroundedAnswer:
     """Stream one turn through the graph, showing a live agent timeline."""
     from langchain_core.messages import HumanMessage
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
+    from forge.core.checkpoint import sqlite_checkpointer
     from forge.core.graph import build_default_nodes, build_graph
 
     settings = get_settings()
@@ -221,8 +221,7 @@ async def _ask_graph(question: str, session_id: str) -> GroundedAnswer:
             grid.add_row(line)
         return Panel(grid, title=f"forge · session {session_id}", border_style="cyan")
 
-    settings.checkpoint_db.parent.mkdir(parents=True, exist_ok=True)
-    async with AsyncSqliteSaver.from_conn_string(str(settings.checkpoint_db)) as checkpointer:
+    async with sqlite_checkpointer(settings.checkpoint_db) as checkpointer:
         graph = build_graph(nodes, checkpointer=checkpointer)
         with Live(panel(), console=console, refresh_per_second=8) as live:
             async for update in graph.astream(

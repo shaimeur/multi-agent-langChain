@@ -67,8 +67,17 @@ def plan_change(llm: BaseChatModel, request: str, pack: ContextPack) -> ChangePl
 
 
 def make_planner_node(
-    *, llm: BaseChatModel, max_reentries: int = 1
+    *,
+    llm: BaseChatModel,
+    max_reentries: int = 1,
+    success_node: str = "editor",
+    retry_node: str = "retriever",
 ) -> Callable[[ForgeState], Command]:
+    """The planner node. Its two exits are parameters because the graph it sits in
+    decides them: the D6 change path goes straight to the editor, while D9's full
+    graph must route a finished plan through the human approval gate instead — and a
+    node that hardcoded ``goto="editor"`` could silently bypass it."""
+
     def planner_node(state: ForgeState) -> Command:
         pack = get_pack(state) or ContextPack()
         budget = get_budget(state).spend(calls=1)
@@ -82,13 +91,13 @@ def make_planner_node(
         wants_more = plan.needs_more_context or not plan.steps or plan.ungrounded_steps(pack)
         if wants_more and reentries < max_reentries:
             return Command(
-                goto="retriever",
+                goto=retry_node,
                 update={"plan": plan, "plan_reentries": reentries + 1, "budget": budget},
             )
 
         # Cap reached or already grounded: keep only the steps whose evidence resolves.
         grounded = plan.model_copy(update={"steps": [s for s in plan.steps if s.is_grounded(pack)]})
-        goto = "editor" if grounded.steps else END
+        goto = success_node if grounded.steps else END
         return Command(goto=goto, update={"plan": grounded, "budget": budget})
 
     return planner_node

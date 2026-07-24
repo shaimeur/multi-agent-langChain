@@ -22,14 +22,17 @@ from langgraph.graph import END
 from forge.config import CacheMode, Settings
 from forge.core.loop import (
     build_implement_loop,
-    make_apply_editor_node,
-    make_reviewer_stub_node,
+    make_editor_node,
+    make_reviewer_node,
 )
 from forge.core.state import Budget
 from forge.core.workspace import create_workspace, remove_workspace
 from forge.models import (
     ChangePlan,
+    Chunk,
+    ChunkKind,
     CitationRef,
+    ContextPack,
     ExecutionOutcome,
     ExecutionReport,
     GeneratedTest,
@@ -108,6 +111,27 @@ def workspace(settings, repo):
     ws = create_workspace("repair", settings=settings, repo=repo)
     yield ws
     remove_workspace(ws)
+
+
+def _pack():
+    """The retrieved context the plan cites. The reviewer's grounding point (§4/A5.1)
+    resolves every citation against this, so the loop is given a real one."""
+    return ContextPack(
+        chunks=[
+            Chunk(
+                chunk_id="chunk-add",
+                repo="repo",
+                path="calc.py",
+                language="python",
+                kind=ChunkKind.FUNCTION,
+                symbol="add",
+                start_line=1,
+                end_line=2,
+                text="x",
+                raw=BUGGY.strip(),
+            )
+        ]
+    )
 
 
 def _plan():
@@ -200,28 +224,26 @@ def test_applying_never_touches_the_source_repo(workspace, repo):
     assert (repo / "calc.py").read_text() == BUGGY
 
 
-# --- the reviewer stub's routing ------------------------------------------
+# --- the reviewer's routing -----------------------------------------------
+
+
+def _reviewed(settings, **state):
+    """Run the reviewer node over a well-formed state — plan and pack included,
+    because the grounding point resolves the plan's citations against the pack."""
+    node = make_reviewer_node(settings=settings)
+    return node({"plan": _plan(), "pack": _pack(), "patch_ok": True, "iterations": 0, **state})
 
 
 def test_reviewer_approves_a_green_run(settings):
-    node = make_reviewer_stub_node(settings=settings)
-
-    command = node({"report": _report(ExecutionOutcome.PASSED, passed=3), "patch_ok": True})
+    command = _reviewed(settings, report=_report(ExecutionOutcome.PASSED, passed=3))
 
     assert command.goto == END
+    assert command.update["review"].approved
     assert command.update["revision"] is None
 
 
 def test_reviewer_sends_a_red_run_back_to_the_editor(settings):
-    node = make_reviewer_stub_node(settings=settings)
-
-    command = node(
-        {
-            "report": _report(failed=1, failures=[TestFailure(test_id="t::a")]),
-            "patch_ok": True,
-            "iterations": 0,
-        }
-    )
+    command = _reviewed(settings, report=_report(failed=1, failures=[TestFailure(test_id="t::a")]))
 
     assert command.goto == "editor"
     assert command.update["revision"].failures[0].test_id == "t::a"
@@ -229,24 +251,17 @@ def test_reviewer_sends_a_red_run_back_to_the_editor(settings):
 
 def test_reviewer_stops_at_the_iteration_cap_instead_of_looping(settings):
     """A model that cannot fix it stops costing money — cahier §9, the A0 guard."""
-    node = make_reviewer_stub_node(settings=settings)
-
-    command = node(
-        {
-            "report": _report(failed=1),
-            "patch_ok": True,
-            "iterations": settings.max_iterations_per_step - 1,
-        }
+    command = _reviewed(
+        settings, report=_report(failed=1), iterations=settings.max_iterations_per_step - 1
     )
 
     assert command.goto == END
     assert command.update["iterations"] == settings.max_iterations_per_step
+    assert command.update["halted"], "it stops with a readable reason, not silently"
 
 
 def test_a_patch_that_did_not_apply_is_its_own_revision_reason(settings):
-    node = make_reviewer_stub_node(settings=settings)
-
-    command = node({"report": _report(ExecutionOutcome.PASSED), "patch_ok": False, "iterations": 0})
+    command = _reviewed(settings, report=_report(ExecutionOutcome.PASSED), patch_ok=False)
 
     assert command.goto == "editor"
     assert "did not apply" in command.update["revision"].reason
@@ -269,7 +284,7 @@ def test_the_editor_is_shown_the_previous_failure_as_evidence(workspace):
             )
         ]
     )
-    node = make_apply_editor_node(llm=llm, workspace=workspace)
+    node = make_editor_node(llm=llm, workspace=workspace)
 
     node(
         {
@@ -299,7 +314,7 @@ def test_the_revision_is_consumed_so_the_next_pass_starts_clean(workspace):
             )
         ]
     )
-    node = make_apply_editor_node(llm=llm, workspace=workspace)
+    node = make_editor_node(llm=llm, workspace=workspace)
 
     out = node({"plan": _plan(), "budget": Budget(), "revision": RevisionRequest(reason="x")})
 
@@ -336,7 +351,7 @@ def test_a_broken_function_is_repaired_in_under_three_iterations(workspace, sett
     )
 
     loop = build_implement_loop(coder_llm=llm, workspace=workspace, settings=settings)
-    final = loop.invoke({"plan": _plan(), "budget": Budget(), "iterations": 0})
+    final = loop.invoke({"plan": _plan(), "pack": _pack(), "budget": Budget(), "iterations": 0})
 
     assert final["regression_red"] is True, "the regression test must fail before the fix"
     assert final["report"].ok, f"the suite is green: {final['report'].headline()}"
@@ -360,7 +375,7 @@ def test_the_loop_gives_up_cleanly_when_the_model_never_fixes_it(workspace, sett
     )
 
     loop = build_implement_loop(coder_llm=never_fixes, workspace=workspace, settings=settings)
-    final = loop.invoke({"plan": _plan(), "budget": Budget(), "iterations": 0})
+    final = loop.invoke({"plan": _plan(), "pack": _pack(), "budget": Budget(), "iterations": 0})
 
     assert final["iterations"] == settings.max_iterations_per_step
     assert not final["report"].ok
@@ -384,6 +399,6 @@ def test_a_regression_test_that_passes_before_the_fix_is_reported_as_such(worksp
     )
 
     loop = build_implement_loop(coder_llm=llm, workspace=workspace, settings=settings)
-    final = loop.invoke({"plan": _plan(), "budget": Budget(), "iterations": 0})
+    final = loop.invoke({"plan": _plan(), "pack": _pack(), "budget": Budget(), "iterations": 0})
 
     assert final["regression_red"] is False

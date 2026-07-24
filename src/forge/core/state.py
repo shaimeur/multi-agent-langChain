@@ -13,6 +13,7 @@ about what carries information between agents.
 
 from __future__ import annotations
 
+import operator
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage
@@ -27,6 +28,7 @@ from forge.models import (
     ExecutionReport,
     GroundedAnswer,
     PatchSet,
+    ReviewVerdict,
     RevisionRequest,
     RouteDecision,
 )
@@ -124,3 +126,13 @@ class ForgeState(TypedDict, total=False):
     """The regression test the SANDBOX_ENGINEER wrote, repo-relative."""
     regression_red: bool
     """Whether that test actually failed before the fix. A green one pins nothing."""
+
+    # --- review and human-in-the-loop (D9) ---
+    review: ReviewVerdict | None
+    """The REVIEWER's five-point verdict (cahier §5.4 names this field)."""
+    approvals: Annotated[list[str], operator.add]
+    """Every human decision this run, in order — the audit trail the §5.5 gates leave."""
+    contested: dict[str, int]
+    """Per-file editor/reviewer disagreements, for the §4 loop-pathology escalation."""
+    halted: str
+    """Why the run stopped short: a rejection, the budget, or a pathology. Never a traceback."""

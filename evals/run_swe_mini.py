@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from evals.swe_mini.bugs import BUGS  # noqa: E402
 from evals.swe_mini.harness import BugResult, grade, seed, verify  # noqa: E402
 from forge.config import LLMRole, get_settings  # noqa: E402
+from forge.core.agents.reviewer import shares_family_with_editor  # noqa: E402
 from forge.core.workspace import session_workspace  # noqa: E402
 
 console = Console()
@@ -66,17 +67,49 @@ def _repair(limit: int) -> int:
     from forge.core.loop import build_implement_loop
     from forge.core.state import Budget
     from forge.llm.provider import build_llm
-    from forge.models import ChangePlan, CitationRef, PlanStep
+    from forge.models import (
+        ChangePlan,
+        Chunk,
+        ChunkKind,
+        CitationRef,
+        ContextPack,
+        PlanStep,
+    )
 
     settings = get_settings()
     coder = build_llm(LLMRole.CODER, settings=settings)
+    # §4/A5 wants the critic on a different family from the editor; under one provider
+    # it resolves to the same model, which is worth saying out loud rather than implying.
+    reviewer = build_llm(LLMRole.REASONER, settings=settings)
+    if shares_family_with_editor(settings):
+        console.print(
+            "[yellow]note: reviewer and editor resolve to the same model — "
+            "the critic shares the editor's blind spots (cahier §4/A5).[/yellow]"
+        )
     results: list[BugResult] = []
 
     for bug in BUGS[:limit]:
         with session_workspace(f"swe-{bug.bug_id}", settings=settings) as workspace:
             seed(workspace, bug)
-            # The agent is given the bug report and the file — never the hidden test,
-            # and never the reference fix.
+            # The agent is given the bug report and the seeded file — never the hidden
+            # test, and never the reference fix. The pack stands in for retrieval: the
+            # reviewer's grounding point resolves the plan's citation against it.
+            source = workspace.read(bug.path)
+            pack = ContextPack(
+                chunks=[
+                    Chunk(
+                        chunk_id="seeded",
+                        repo="target",
+                        path=bug.path,
+                        language="python",
+                        kind=ChunkKind.MODULE,
+                        start_line=1,
+                        end_line=source.count("\n") + 1,
+                        text=source,
+                        raw=source,
+                    )
+                ]
+            )
             plan = ChangePlan(
                 summary=bug.title,
                 steps=[
@@ -87,8 +120,10 @@ def _repair(limit: int) -> int:
                     )
                 ],
             )
-            loop = build_implement_loop(coder_llm=coder, workspace=workspace, settings=settings)
-            final = loop.invoke({"plan": plan, "budget": Budget(), "iterations": 0})
+            loop = build_implement_loop(
+                coder_llm=coder, reviewer_llm=reviewer, workspace=workspace, settings=settings
+            )
+            final = loop.invoke({"plan": plan, "pack": pack, "budget": Budget(), "iterations": 0})
             results.append(
                 grade(workspace, bug, settings=settings, iterations=final.get("iterations", 0))
             )
