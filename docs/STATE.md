@@ -6,7 +6,7 @@
 Last updated : 2026-07-24
 Roadmap day  : D7 done (DoD met) · D8 (Tester agent + repair loop) is next
 Branch       : main
-Last commit  : [D7] Sandbox service — hardened container executor, structured ExecutionReport
+Last commit  : 753f314 [D7] Sandbox service — hardened container executor, structured ExecutionReport
 
 ## Done (verified)
 - [x] D1 foundations · D2 AST ingestion (617 chunks) · D3 hybrid retrieval · Grounded-RAG (D5-pre)
@@ -22,8 +22,11 @@ Last commit  : [D7] Sandbox service — hardened container executor, structured 
       uid 1000, pip removed); `sandbox/runner.py` (ephemeral container per run + documented fallback);
       `sandbox/report.py` (pytest/ruff parsers); `sandbox/tools.py` (run_pytest/run_python/run_linter
       as LangChain tools); `ExecutionReport`+`Isolation`+`ExecutionOutcome` in models.py;
-      **docs/limitations.md** (new, L2). Proof: test_sandbox.py. `uv run pytest` → **206 passed,
-      5 skipped** (exit 0); `ruff check src tests` exit 0
+      **docs/limitations.md** (new, L2 deliverable).
+      DoD — `pytest tests/test_sandbox.py -k "structured_report or infinite_loop or
+      survives_a_runaway or fork_bomb or egress"` → **8 passed, 2 skipped, exit 0**.
+      Full — `CACHE_MODE=replay uv run pytest` → **206 passed, 5 skipped, exit 0**.
+      Lint — `ruff check src tests` → **exit 0**
 - [x] Continuity system — .claude/ hooks, STATE.md, /checkpoint, CLAUDE.md
 
 ## In progress
@@ -65,3 +68,6 @@ Last commit  : [D7] Sandbox service — hardened container executor, structured 
 - `make sandbox-image` builds `forge-sandbox:latest`. Without it the sandbox silently uses the fallback
   (visible as `ExecutionReport.isolation`), so rebuild it on a fresh clone before demoing hardening.
 - Embedded Qdrant: ONE client per path per process. Run /checkpoint before stopping.
+- **Untracked, predates D7**: `data/fixtures/llm/5538233c22e6d940.json` — a real ollama grounded-answer
+  replay fixture recorded 2026-07-24T00:14 (a D6-era run). Left uncommitted deliberately, not lost.
+  Commit it if that recording should be part of the offline demo set; delete it if it was a stray.
