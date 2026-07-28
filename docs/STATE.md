@@ -16,6 +16,8 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
       D9 Reviewer+HITL (both `interrupt()` gates) · D10 Guardrails · D11 Red team (**C5**, 32/32)
 - [x] **D12 API+CLI — C8 CLOSED**. All §11 routes, SSE (CRLF), `forge fix` with both gates
 - [x] **C1 CLOSED** (02261ef) — `pytest tests/test_agents.py -k distinct` → exit 0; 6 distinct agents
+- [x] **C3 CLOSED** (2026-07-28) — full RAG pipeline: `forge ask` grounded + `file:line` citations
+      (live + replay); `uv run pytest evals/test_citations_resolve.py` → exit 0
 - [x] **B2 real-model proof (2026-07-28)** — Gemini key verified against live quota. A real model
       (`gemini-flash-latest`) drives EDITOR/TESTER/REVIEWER + RAG, live and offline-replayable:
       · `forge ask` → **● grounded**, `file:line` citations resolve (`sqlparse/__init__.py:68-80`)
@@ -30,8 +32,6 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
 - **D13 Web UI** — O1 RESOLVED: **React + Vite + TS** (02261ef, descope §2). API ready (sessions, SSE,
   approve, history, metrics — all tested). Next: scaffold `web/` (Vite+TS+Tailwind, `react-diff-viewer`
   /Monaco) against `/v1/*`; then C7 records the §15.6 4-min run to `docs/demo.mp4`.
-- **C3 one test away** — the `forge ask` grounded+cited half is DONE (live + replay). Remaining: write
-  `evals/test_citations_resolve.py` (assert each citation resolves to a real `file:line`) → C3 ticks.
 - **Planner + full graph never hit a real model** — swe_mini drives `build_implement_loop` with a
   hand-built `ChangePlan`; the PLANNER and end-to-end `forge fix` (supervisor→planner→gates→reviewer)
   are still scripted-model only. Needed for C2/C7. Next: run `forge fix` once with the real model.
@@ -47,7 +47,8 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
 - **O5** injection tier 2 (descope entry needed, frozen → human) · **O4** reviewer/editor same family,
   one provider · **O2** C6 "Tools AND MCP" wording · **O3** `make lint` red pre-D7 (`make fmt` fixes) ·
   **B3** `qwen2.5-coder:7b` unpulled.
-- **Gates: 3 of C1–C10 closed (C1, C5, C8)** at D12 of D15. C3 one test file away; C2 needs the notebook.
+- **Gates: 4 of C1–C10 closed (C1, C3, C5, C8)** at D12 of D15. C2 needs the notebook; the planner /
+  full `forge fix` real-model run feeds C2 + C7.
 
 ## Do not redo
 - **Worktree path**: `create_workspace` now `.resolve()`s `workspace_root`. A *relative* WORKSPACE_ROOT
