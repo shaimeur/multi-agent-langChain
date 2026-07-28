@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "c0c884997cca99f4",
+  "recorded_at": "2026-07-28T18:11:48+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: Quoted identifiers come back wrong: parsing 'select * from \\\"my table\\\"' and asking the identifier for its real name returns the name with a trailing double quote still attached. It should be just: my table\\nTarget file: sqlparse/utils.py\\nDeclared blast radius: (none declared)\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/utils.py\\n<<< old\\ndef remove_quotes(val):\\n    \\\"\\\"\\\"Helper that removes surrounding quotes from strings.\\\"\\\"\\\"\\n    if val is None:\\n        return\\n    if val[0] in ('\\\"', \\\"'\\\", '`') and val[0] == val[-1]:\\n        val = val[1:]\\n    return val\\n>>> new\\ndef remove_quotes(val):\\n    \\\"\\\"\\\"Helper that removes surrounding quotes from strings.\\\"\\\"\\\"\\n    if val is None:\\n        return\\n    if val[0] in ('\\\"', \\\"'\\\", '`') and val[0] == val[-1]:\\n        val = val[1:-1]\\n    return val\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch correctly fixes the remove_quotes function by slicing val[1:-1] instead of val[1:], properly removing both the leading and trailing quotes without any unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"Only the targeted helper function in sqlparse/utils.py was modified, matching the planned target file and scope.\"}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch correctly fixes the remove_quotes function by slicing val[1:-1] instead of val[1:], properly removing both the leading and trailing quotes without any unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"Only the targeted helper function in sqlparse/utils.py was modified, matching the planned target file and scope.\"}",
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fa9ec-ee29-7233-9e29-abbec0b07588-0",
+            "usage_metadata": {
+              "input_tokens": 349,
+              "output_tokens": 499,
+              "total_tokens": 848,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 409
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}
