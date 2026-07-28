@@ -64,7 +64,11 @@ def create_workspace(
     """Add a fresh worktree for ``session_id`` at ``workspace_root/<session_id>``."""
     settings = settings or get_settings()
     repo = Path(repo or settings.target_repo).resolve()
-    root = Path(settings.workspace_root) / session_id
+    # Resolve to absolute like ``repo`` above. ``git worktree add`` runs with cwd=repo,
+    # so a *relative* workspace_root (WORKSPACE_ROOT=data/workspaces in .env) gets created
+    # under the target repo, while Workspace.path resolves it against the process cwd —
+    # two different places, leaving the sandbox to mount an empty dir with no source.
+    root = (Path(settings.workspace_root) / session_id).resolve()
     root.parent.mkdir(parents=True, exist_ok=True)
 
     workspace = Workspace(session_id=session_id, path=root, repo=repo)
