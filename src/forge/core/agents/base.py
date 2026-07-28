@@ -11,13 +11,13 @@ from __future__ import annotations
 from langchain_core.messages import AnyMessage, HumanMessage
 
 from forge.core.state import Budget, ForgeState
+from forge.llm.output import content_to_text
 from forge.models import ChangePlan, ContextPack, ExecutionReport, PatchSet
 
 
 def message_text(message: AnyMessage) -> str:
     """A message's text as a plain string, whatever shape its content takes."""
-    content = getattr(message, "content", "")
-    return content if isinstance(content, str) else str(content)
+    return content_to_text(getattr(message, "content", ""))
 
 
 def latest_user_text(state: ForgeState) -> str:

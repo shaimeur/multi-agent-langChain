@@ -75,9 +75,13 @@ class Settings(BaseSettings):
     llm_provider: LLMProvider = LLMProvider.GEMINI
 
     google_api_key: str = ""
-    gemini_router_model: str = "gemini-2.5-flash-lite"
-    gemini_reasoner_model: str = "gemini-2.5-flash"
-    gemini_coder_model: str = "gemini-2.5-flash"
+    # Repointed off the 2.5 tier: as of 2026-07 Google 404s gemini-2.5-flash and
+    # -flash-lite for keys created after their cutover ("no longer available to new
+    # users"), and 2.0-flash-lite is 429-throttled. The 3.5 tier serves cleanly.
+    # Verify in the AI Studio dashboard the week of the demo — this list churns.
+    gemini_router_model: str = "gemini-3.5-flash-lite"
+    gemini_reasoner_model: str = "gemini-3.5-flash"
+    gemini_coder_model: str = "gemini-3.5-flash"
 
     groq_api_key: str = ""
     groq_router_model: str = "llama-3.3-70b-versatile"

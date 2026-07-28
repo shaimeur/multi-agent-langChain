@@ -23,6 +23,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from forge.config import LLMRole, Settings, get_settings
+from forge.llm.output import content_to_text
 from forge.llm.provider import build_llm
 from forge.models import Citation, ContextPack, GroundedAnswer, SourceRef
 from forge.rag.retrieve import Filters, hybrid_search
@@ -107,7 +108,8 @@ def ground_answer(
         return GroundedAnswer(question=question, answer=_EMPTY, grounded=False, sources=sources)
 
     reply = llm.invoke(_messages(question, pack, repo_name))
-    text = (reply.content if hasattr(reply, "content") else str(reply)).strip()
+    raw = reply.content if hasattr(reply, "content") else reply
+    text = content_to_text(raw).strip()
     citations = _citations(text, pack)
     grounded = bool(citations) and all(pack.supports(c) for c in citations)
     return GroundedAnswer(
