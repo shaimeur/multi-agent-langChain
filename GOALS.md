@@ -81,7 +81,7 @@ after running it.
 - [x] Pin torch to the CPU wheel index — image 11.1 GB → 3.08 GB, venv 5.0 → 1.2 GB
 - [x] ADR-001 (agent decomposition), ADR-002 (vector store)
 - [ ] **Choose the demo target repository** — carried to D3 #1. This is **B1**
-- [ ] **Verify one LLM provider key against a live quota** — no `.env` exists. This is **B2**
+- [x] **Verify one LLM provider key against a live quota** — Gemini key verified live (2026-07-28); the 3.5 tier serves (`gemini-2.5-*` 404 for new keys), runs on `gemini-flash-latest`. A real model now drives RAG + editor/tester/reviewer (`forge ask` grounded; `swe_mini` 3/4). **B2 key-half done**; planner + full `forge fix` graph still scripted-model only
 - [ ] **Pull the Ollama coder model** (`qwen2.5-coder:7b`, ~4.5 GB) — this is **B3**
 
 **DoD: `docker compose up` starts Qdrant + the API and the health probe answers.** Met — idle RSS

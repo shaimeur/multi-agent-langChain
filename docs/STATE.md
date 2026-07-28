@@ -3,75 +3,65 @@
      unless its DoD command actually ran and passed this or a named session.
      GOALS.md is the durable plan; this file is where you are in it. -->
 
-Last updated : 2026-07-24
-Roadmap day  : D12 DoD met (`forge review` carried) · D13 (Web UI) is next — **O1 blocks it**
+Last updated : 2026-07-28
+Roadmap day  : D1–D12 done · **B2 largely resolved** (real model on RAG + repair loop) · D13
+               (React Web UI, O1 resolved) is next
 Branch       : main
-Last commit  : b37a52d [D12] §11 route table, SSE streaming, and `forge fix` end to end
+Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini real run (3/4)
 
 ## Done (verified)
-- [x] D1 foundations · D2 AST ingestion (617 chunks) · D3 hybrid retrieval · D4 RAG eval
-      (**MiniLM FROZEN**, reranker OFF) · D5 LangGraph + memory (restart proven offline)
-- [x] **D6 Planner + Editor** — worktree, `git apply --check`, grounding enforced in code
-- [x] **D7 Sandbox** — container per run + documented fallback; `docs/limitations.md`; 15 flags
-      verified via `docker inspect`
-- [x] **D8 Tester + repair loop** — regression-test-first; `evals/swe_mini/` (4 bugs + hidden
-      tests); broken function repaired in **2 iterations** (scripted model)
-- [x] **D9 Reviewer + HITL** — 5 fixed points, **3 of 5 never reach a model**; `interrupt()` at both
-      §5.5 gates; strict checkpoint serde (`core/checkpoint.py`)
-- [x] **D10 Guardrails** — `guardrails/` (events log, policy, injection, both sentinels), wired live
-- [x] **D11 Red team** — `evals/security/`, **32/32 attacks mitigated**, CI workflow. **C5 CLOSED**
-- [x] **D12 API + CLI — DoD MET** (2026-07-24). All §11 routes; `api/sessions.py` (worktree +
-      counters), `api/streaming.py` (SSE, five typed frame kinds, always a terminal frame);
-      `/v1/metrics`; `forge fix` with the live timeline and both gates as prompts;
-      `scripts/sse_smoke.sh`. **C8 CLOSED.**
-      Full — `CACHE_MODE=replay uv run pytest` → **340 passed, 5 skipped, exit 0**;
-      `./scripts/sse_smoke.sh` → **exit 0**; `evals/security` → 32/32; `ruff` → exit 0
-- [x] Continuity system — .claude/ hooks, STATE.md, /checkpoint, CLAUDE.md
+- [x] D1–D5 — foundations · AST ingestion (617 chunks) · hybrid retrieval · RAG eval
+      (**MiniLM FROZEN**, reranker OFF) · LangGraph + memory (restart proven offline)
+- [x] D6 Planner+Editor · D7 Sandbox (15 flags via `docker inspect`) · D8 Tester+repair loop ·
+      D9 Reviewer+HITL (both `interrupt()` gates) · D10 Guardrails · D11 Red team (**C5**, 32/32)
+- [x] **D12 API+CLI — C8 CLOSED**. All §11 routes, SSE (CRLF), `forge fix` with both gates
+- [x] **C1 CLOSED** (02261ef) — `pytest tests/test_agents.py -k distinct` → exit 0; 6 distinct agents
+- [x] **B2 real-model proof (2026-07-28)** — Gemini key verified against live quota. A real model
+      (`gemini-flash-latest`) drives EDITOR/TESTER/REVIEWER + RAG, live and offline-replayable:
+      · `forge ask` → **● grounded**, `file:line` citations resolve (`sqlparse/__init__.py:68-80`)
+      · `swe_mini` for real — `--verify` 4/4 sound (docker); repair **3/4** (SM-03 hit budget);
+        both reproduce under `CACHE_MODE=replay` from committed fixtures (ec964c7, ccfe8b1)
+- [x] **Gemini 3.x content fix** (94c9c3d) — `.content` is a block list now; `llm/output.py`
+      `content_to_text` flattens it; `with_structured_output` agents were already immune
+- [x] **Worktree bug fix** (f20cf22) — relative `WORKSPACE_ROOT` lost the worktree (see Do not redo)
+- [x] Full suite — `CACHE_MODE=replay uv run pytest` → exit 0 (359 passed, 6 skipped); ruff clean
 
 ## In progress
-- D13 Web UI — **blocked on O1 (React vs Streamlit, descope §2 is OPEN). ASK THE HUMAN FIRST.**
-  Whichever wins, the API is ready: sessions, SSE, approve, history, metrics all exist and are
-  tested. C7 wants the §15.6 four-minute script recorded to `docs/demo.mp4` — that needs B2 too.
-- **Carried**: `forge review` (D12 — `forge fix` already renders the checklist; standalone wants a
-  real model) · injection tier 2 (O5, needs a human call) · `notebooks/02_agent_traces.ipynb`
-  (L3 part 2, C2 depends on it) · `forge tools` listing 10 (C6, but settle O2's wording first).
+- **D13 Web UI** — O1 RESOLVED: **React + Vite + TS** (02261ef, descope §2). API ready (sessions, SSE,
+  approve, history, metrics — all tested). Next: scaffold `web/` (Vite+TS+Tailwind, `react-diff-viewer`
+  /Monaco) against `/v1/*`; then C7 records the §15.6 4-min run to `docs/demo.mp4`.
+- **C3 one test away** — the `forge ask` grounded+cited half is DONE (live + replay). Remaining: write
+  `evals/test_citations_resolve.py` (assert each citation resolves to a real `file:line`) → C3 ticks.
+- **Planner + full graph never hit a real model** — swe_mini drives `build_implement_loop` with a
+  hand-built `ChangePlan`; the PLANNER and end-to-end `forge fix` (supervisor→planner→gates→reviewer)
+  are still scripted-model only. Needed for C2/C7. Next: run `forge fix` once with the real model.
+- **Carried**: `notebooks/02_agent_traces.ipynb` (C2 — now unblocked, real traces exist) · `forge tools`
+  listing 10 (C6, settle O2 wording) · `forge review` standalone.
 
 ## Blocked / open decisions
-- **B2 — no cloud key** (`.env` has none; a hook blocks reading it — check booleans via
-  `Settings.google_api_key`). Only `mistral:latest`. D6–D9 and D12's graph path are
-  **mechanism-proven with scripted models**; no real model has driven planner/editor/tester/reviewer,
-  and swe_mini has never run for real. **Blocks C2, C3, C7 and the D14 demo. This is now the single
-  biggest risk to the grade.**
-- **O1 — React vs Streamlit** (descope §2, still OPEN). D13 cannot start without it.
-- **O5 — injection tier 2** not built (tier 1 only). Argued in limitations.md §7; accepting it
-  properly needs a `descope-v1.md` entry and that file is frozen → needs the human.
-- **O4 — reviewer/editor model family**: split by role (CODER vs REASONER), one model under one
-  provider. `shares_family_with_editor()` reports it.
-- B3 — `qwen2.5-coder:7b` unpulled. **O2** — C6 "Tools AND MCP" wording. D1 compose DoD not re-run.
-  **O3** — `make lint` red since before D7 (`rag/embed.py`, `tests/test_graph.py` fail
-  `ruff format --check`); one `make fmt` fixes it.
-- **Gates: 2 of C1–C10 closed (C5, C8) at D12 of D15.** C1 is still nearly free — 8 agents exist, it
-  only wants `tests/test_agents.py -k distinct`, no model needed.
+- **Canonical coder/reasoner model** — `gemini-3.5-flash` (config default) is **503-throttled** on the
+  free tier; live runs used `gemini-flash-latest`. Fixture keys are model-dependent, so replay needs
+  `GEMINI_CODER_MODEL=GEMINI_REASONER_MODEL=gemini-flash-latest`, or re-record under the pinned model.
+- **.env**: `QDRANT_URL=http://localhost:6333` breaks offline `forge ask` (no server) — blank it for the
+  embedded index, or `docker compose up qdrant`. (`WORKSPACE_ROOT` relative is now handled in code.)
+- **O5** injection tier 2 (descope entry needed, frozen → human) · **O4** reviewer/editor same family,
+  one provider · **O2** C6 "Tools AND MCP" wording · **O3** `make lint` red pre-D7 (`make fmt` fixes) ·
+  **B3** `qwen2.5-coder:7b` unpulled.
+- **Gates: 3 of C1–C10 closed (C1, C5, C8)** at D12 of D15. C3 one test file away; C2 needs the notebook.
 
 ## Do not redo
-- **`build_llm` installs a process-global LangChain cache.** `reset_llm_cache()` + an autouse
-  conftest fixture undo it between tests. Without that, any test touching a real provider routes
-  every later `FakeListChatModel` through the fixture store → FixtureMiss in an unrelated file.
-- **The API is built** (D12). SSE frames are **CRLF**-terminated (bit the smoke script). Every
-  stream ends with `done`/`error`/`interrupt`. `set_graph_factory()` is the test seam. History is
-  read from the checkpointer, not memory, so it survives a restart.
-- **Guardrails** (D10/D11): the event log **never raises** (both paths catch `Exception` — `_connect`
-  fails on the filesystem first). `check_answer(answer, None)` = "verified upstream". Scanned chunks
-  are **copied**. The security pass rate is *derived* from pytest outcomes — never hand-keep it.
-- **Review + HITL** (D9): the patch gate sits *between* `editor` (never writes) and `apply`. Planner
-  exits are parameters so no graph can bypass the plan gate. Use `sqlite_checkpointer()` /
-  `MemorySaver(serde=forge_serde())`, never a bare saver.
-- **Sandbox** (D7): `RLIMIT_DATA` not `RLIMIT_AS`. Output head-truncated → **exit code is the
-  authority**. compose does **not** mount docker.sock. sqlparse @0d24023.
+- **Worktree path**: `create_workspace` now `.resolve()`s `workspace_root`. A *relative* WORKSPACE_ROOT
+  made `git worktree add` (cwd=repo) build the tree under `data/target/…` while `Workspace.path` resolved
+  against the process cwd — the sandbox then mounted an empty dir (import errors, seed misses). This, not
+  drift, is why swe_mini read "unsound". Real swe_mini runs need `SANDBOX_BACKEND=docker`.
+- **Gemini models**: `gemini-2.5-*` **404 for keys created after Google's mid-2026 cutover**; use the 3.5
+  tier / `-latest` aliases. New keys look like `AQ.Ab…`, not `AIza…`. `.content` is a block list (above).
+- **`build_llm` installs a process-global LangChain cache**; `reset_llm_cache()` + autouse conftest undo
+  it. Guardrail log never raises. SSE frames CRLF. Sandbox: `RLIMIT_DATA`, exit-code is authority, image
+  is dep-free (pytest/ruff only), `/work` = the bind-mounted worktree. sqlparse @0d24023.
 
 ## Notes for the next session
-- Commits OMIT the Claude co-author trailer (author Shaimeur). `pythonpath = ["."]`; isort
-  first-party = `forge` + `evals`. `testpaths = ["tests"]`, so the security suite runs only when
-  named — CI runs it as its own step. The 5 skipped tests are container-only under the fallback param.
-- `sandbox/` + `guardrails/` are security-sensitive (CLAUDE.md): flag any flag/cap/allowlist change.
-- `make sandbox-image` builds `forge-sandbox:latest`. Embedded Qdrant: ONE client per path per process.
+- Real runs: `CACHE_MODE=auto SANDBOX_BACKEND=docker GEMINI_CODER_MODEL=gemini-flash-latest
+  GEMINI_REASONER_MODEL=gemini-flash-latest`. Commits OMIT the Claude trailer (author Shaimeur).
+- `sandbox/` + `guardrails/` security-sensitive: flag any flag/cap/allowlist change. `make sandbox-image`
+  builds `forge-sandbox:latest`. Embedded Qdrant: ONE client per path per process.
