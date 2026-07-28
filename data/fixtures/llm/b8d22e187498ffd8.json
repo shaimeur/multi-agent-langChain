@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "b8d22e187498ffd8",
+  "recorded_at": "2026-07-28T22:22:37+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: format(sql, truncate_strings=3) truncates one character too early: \\\"select 'abcdefghij'\\\" gives 'ab[...]' when it should give 'abc[...]'. The truncated string should keep exactly `truncate_strings` characters.\\nTarget file: sqlparse/filters/tokens.py\\nDeclared blast radius: (none declared)\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/filters/tokens.py\\n<<< old\\n                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\\n>>> new\\n                value = ''.join((quote, inner[:self.width], self.char, quote))\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch accurately fixes string truncation by changing `inner[:self.width - 1]` to `inner[:self.width]` in `sqlparse/filters/tokens.py` without any extra or unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"The change is localized strictly to the expected target file and line in `sqlparse/filters/tokens.py` with no missing file updates.\"}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch accurately fixes string truncation by changing `inner[:self.width - 1]` to `inner[:self.width]` in `sqlparse/filters/tokens.py` without any extra or unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"The change is localized strictly to the expected target file and line in `sqlparse/filters/tokens.py` with no missing file updates.\"}",
+                "extras": {
+                  "signature": "EqwKCqkKARFNMg9aCEAnkAequ9B9EZy+EIUK+Z4zIjz8uo8oqXlRX8Ks95A8g/LgdmCjZgxflZTIu3Mqs1e29iAydr6kKZMoIp2Az8COkErYsE2lpRcE/TZzW/kvZfK+adoxeKQt1R19PwB/bjG+8iaj9FMI8C47LvVbE0M2iwyl3Gprzpdlibqx6tc/VdXyKdv2SJNBNk8iF10URniakjo1PuOiJsy4rJmpY50S0svo4ug3NDwZzf4K0h+ZDNj+L/2VNo4IhGoSd6P7f8Kn4J4UdGao7nzWiGG3+k8Sr8RPm71cff5lfxJtogY/sv28FFU3fu2A8WUUn29S2XKurMVoGT2HYw80Q8BLyG5iC3ZdvSsz3nhhr+xebZgtej1lYQSZCUyiz2V1q3bOhCWCVWhoqE2SQzDAm8IWP008+8ZV45igUou0inaeOzhXaxNCvWP9f3OoUUAULCuC9XnzyAymYvxVfbBrht6bIhUxtZnxLm1Ybb9ur6NgRn0ETJPBECt29qLErspzHQGqKLFQQTwNWJ2jKTURmFDGdWikqv4nF4+N5Lhd50HbENCxqOUN04Z38udi/IHX7pdZh8JqkR39LpxFL/bF3NTKIZvCGix7mrhB9xQ24XF46zae8/OqN0YZu7vnrSYJFOgxiq/slKcHkvUVGgSR63o48zp49EoyjjHqeMaO4pC828hnyi7bI9LzjwnHD/0gr6mf1uLAwIyS4g0R0zLbx9prTgzpFvnHu2a6FiS3QrDvuF8gp+uyIT83jwGZc9MDy+ScTZj6Q1M+ko+SoqORdIFLVlh6//IF0yCFC1boy+ukNvcaebA70xqcXzqOeMgS3bBoXrXBI0HZ0jaB2/xVuvGhuv10fgKxXOwoiGxdgCRwPV48H0umUNDQmjOxZbR/HqLNwYATtWP9mucHHYrR6dRtBtqjEdYOakZqu4kOeh4JscB1JRH1geST4SidzBRJHf6pbrq5P3JdGGtW9qava/gKgvB2AZ/p43XBrL+vN2vqr/pob9tLo/DkNraPrOnUeMl+LxGthY/OdosU5yU1V45LLrgQJE02SS/K2nRzpsV3BdaNcV1g+NH5tc7iT4AiZ4v7RNxYY4H7ahkQ3QS7wTWGwMT+D9WKciThRKAZmIMnUxpJXwYT4rGIEzLTlKcEJO6sG8ZVTu08t0LBN9PciysI6meBMrxK1CqYJ/jA8u/I+Ko8M3KyqXUnrmRzTpl+DWYgG650nGGZR0nrdk6WPNjZz1TLZ2NHcHEwT+DflRFSXKTg0rR+dAXRa9g3aVKRZC0ZLbESZLmUZFoRlGV8SdQL3Hav9rRtr6N8bGPDZfNLHPPnS+XGOau8VYNjOE8bVUZr2WBFDDZHzUCIihX6m/Oxg0WUwDBQNncs0t4QFEWgO1oWJnOVNtYHuf7/6+bkgrq0vWNGwvFLp0dBXG93a035cONZcfNZftOMUAod4QSKtSZOB8g6SK5mHEXxJ02Jp1pV0R6OpS8tvJ2LVPEafy8LyrWyDhw16qGlIGbdg/KqoO/oLYadaUv9+nBGcvqrUDcRLsxe6lbPm1YePFuYp69EmnziD9GGKsN1dE41N4GSGpLplK0aYVblxSQyptYj857W2yoGpa85wOyHig9tkme504wHWWkAOGL7em4UMNpAFYHemDeeyTZvwuTmamVUQHVODtCZUCSSjq4F7URhWgDBpqsAB6i3QrsoA8thB9lWO0PZL8l970g8++iGYICG3HficHBngaEWsiwIkosPS9YbVtcQ1w=="
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019faad2-8ec3-77b1-9569-40e7a3d0685a-0",
+            "usage_metadata": {
+              "input_tokens": 273,
+              "output_tokens": 437,
+              "total_tokens": 710,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 333
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

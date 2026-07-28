@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "9a8ea895c01c23df",
+  "recorded_at": "2026-07-28T22:21:47+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: Formatting with identifier_case='upper' also uppercases quoted identifiers. 'select * from \\\"MyTable\\\"' becomes 'select * from \\\"MYTABLE\\\"', which changes what the SQL means \\u2014 a quoted identifier is case-sensitive and must be left alone.\\nTarget file: sqlparse/filters/tokens.py\\nDeclared blast radius: (none declared)\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/filters/tokens.py\\n<<< old\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype:\\n                value = self.convert(value)\\n            yield ttype, value\\n>>> new\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype and not value.startswith(('\\\"', '`', '[')):\\n                value = self.convert(value)\\n            yield ttype, value\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch correctly prevents case conversion for quoted identifiers starting with double quotes, backticks, or square brackets, directly fulfilling the planned step without any unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"Only the targeted file was modified and no unexpected files were touched.\"}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch correctly prevents case conversion for quoted identifiers starting with double quotes, backticks, or square brackets, directly fulfilling the planned step without any unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"Only the targeted file was modified and no unexpected files were touched.\"}",
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019faad1-cd49-7ab0-ad3f-f0c6d1bdd558-0",
+            "usage_metadata": {
+              "input_tokens": 334,
+              "output_tokens": 532,
+              "total_tokens": 866,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 457
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

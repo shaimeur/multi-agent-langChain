@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "11982fbc326dd876",
+  "recorded_at": "2026-07-28T22:22:26+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'A pytest module the SANDBOX_ENGINEER wrote to pin a change (cahier §4).\\n\\nFor a bug fix this is written and run *before* the patch, and it is supposed to\\nfail: a regression test that passes against the unfixed code proves nothing, and\\nthe loop records that as ``regression_red=False`` rather than quietly accepting\\na test that would pass no matter what the editor did.', 'properties': {'path': {'title': 'Path', 'type': 'string'}, 'source': {'title': 'Source', 'type': 'string'}, 'rationale': {'default': '', 'title': 'Rationale', 'type': 'string'}}, 'required': ['path', 'source'], 'title': 'GeneratedTest', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the SANDBOX_ENGINEER for FORGE. Write ONE self-contained pytest module that reproduces the reported bug against the CURRENT (unfixed) code. It must FAIL now and pass once the bug is fixed. Import the code under test by its repo-relative module path. Assert the CORRECT behaviour \\u2014 never assert the buggy behaviour to make it pass. No network, no fixtures outside the file, no mocks of the function under test. Return the file path (conventionally tests/test_<name>.py) and its full source.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Bug report / change request: \\nTarget file: sqlparse/filters/tokens.py\\nPlanned fix: format(sql, truncate_strings=3) truncates one character too early: \\\"select 'abcdefghij'\\\" gives 'ab[...]' when it should give 'abc[...]'. The truncated string should keep exactly `truncate_strings` characters.\\n\\n<file path=sqlparse/filters/tokens.py>\\n#\\n# Copyright (C) 2009-2020 the sqlparse authors and contributors\\n# <see AUTHORS file>\\n#\\n# This module is part of python-sqlparse and is released under\\n# the BSD License: https://opensource.org/licenses/BSD-3-Clause\\n\\nfrom sqlparse import tokens as T\\n\\n\\nclass _CaseFilter:\\n    ttype = None\\n\\n    def __init__(self, case=None):\\n        case = case or 'upper'\\n        self.convert = getattr(str, case)\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype:\\n                value = self.convert(value)\\n            yield ttype, value\\n\\n\\nclass KeywordCaseFilter(_CaseFilter):\\n    ttype = T.Keyword\\n\\n\\nclass IdentifierCaseFilter(_CaseFilter):\\n    ttype = T.Name, T.String.Symbol\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype and value.strip()[0] != '\\\"':\\n                value = self.convert(value)\\n            yield ttype, value\\n\\n\\nclass TruncateStringFilter:\\n    def __init__(self, width, char):\\n        self.width = width\\n        self.char = char\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype != T.Literal.String.Single:\\n                yield ttype, value\\n                continue\\n\\n            if value[:2] == \\\"''\\\":\\n                inner = value[2:-2]\\n                quote = \\\"''\\\"\\n            else:\\n                inner = value[1:-1]\\n                quote = \\\"'\\\"\\n\\n            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\\n            yield ttype, value\\n\\n</file>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\n  \"path\": \"tests/test_truncate_strings.py\",\n  \"source\": \"import sqlparse\\n\\ndef test_truncate_strings_length():\\n    sql = \\\"select 'abcdefghij'\\\"\\n    res = sqlparse.format(sql, truncate_strings=3)\\n    assert res == \\\"select 'abc[...]'\\\"\\n\",\n  \"rationale\": \"Tests that sqlparse.format with truncate_strings=3 keeps exactly 3 characters ('abc') before the truncation marker '[...]', reproducing the off-by-one truncation bug.\"\n}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"path\": \"tests/test_truncate_strings.py\",\n  \"source\": \"import sqlparse\\n\\ndef test_truncate_strings_length():\\n    sql = \\\"select 'abcdefghij'\\\"\\n    res = sqlparse.format(sql, truncate_strings=3)\\n    assert res == \\\"select 'abc[...]'\\\"\\n\",\n  \"rationale\": \"Tests that sqlparse.format with truncate_strings=3 keeps exactly 3 characters ('abc') before the truncation marker '[...]', reproducing the off-by-one truncation bug.\"\n}",
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019faad2-5523-7c91-9d71-733a66b96ffa-0",
+            "usage_metadata": {
+              "input_tokens": 633,
+              "output_tokens": 1488,
+              "total_tokens": 2121,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 1359
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

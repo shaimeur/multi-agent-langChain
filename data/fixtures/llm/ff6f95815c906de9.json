@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "ff6f95815c906de9",
+  "recorded_at": "2026-07-28T22:22:14+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: Formatting with identifier_case='upper' also uppercases quoted identifiers. 'select * from \\\"MyTable\\\"' becomes 'select * from \\\"MYTABLE\\\"', which changes what the SQL means \\u2014 a quoted identifier is case-sensitive and must be left alone.\\nTarget file: sqlparse/filters/tokens.py\\nDeclared blast radius: (none declared)\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/filters/tokens.py\\n<<< old\\n            if ttype in self.ttype:\\n                value = self.convert(value)\\n>>> new\\n            if ttype in self.ttype and not value.startswith(('\\\"', \\\"'\\\", '`', '[')):\\n                value = self.convert(value)\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch prevents converting token values that start with quote characters or brackets, directly addressing the issue where quoted identifiers were being modified during identifier casing without unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"No blast radius files were declared, and the changes are strictly localized to sqlparse/filters/tokens.py.\"}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch prevents converting token values that start with quote characters or brackets, directly addressing the issue where quoted identifiers were being modified during identifier casing without unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"No blast radius files were declared, and the changes are strictly localized to sqlparse/filters/tokens.py.\"}",
+                "extras": {
+                  "signature": "EqsLCqgLARFNMg9Ak9GSv+Phvd2ZcIts//Z8JZzedRlH085BZfqXKm3qk8mzwmJIUSRpvtoBrcJpyeNxbg0cN5lz5LEXlbRDWSYdJtPHx4U0CkSb/GU+T4oA1JCcOuU4mqqS8HfIIACQy7U79yKx5eLb43Y+yfUqMVKvPdYXE0hwMII9wsyFWnUNlJefJxVM+b+3h2Zq+gs8Nv+oVo9dXqFE+YatKKrH3In5p/w5fiUotJk6h19+57eyHoupD5WCNkvO2GK2RyTYmNz8VZnCCpx0Bm4B5S3lazqhCYihYuC0joN1GYnV42WCPSTnfXLYQvZmq9yfR3g51TSVz11gmEvjMlwF9jH/gnXrWfAVTEQMcj1ftq18YP97LYkToiKh1oR8NbO5VvpN4PJwqO1Xk6/AWlXs52Lqhh+X2O7Qjiny3T1dAE3w2DMCCOW5+8Ih8c9Vxh/5/dDFFnkJCCp7eGJ9Bo9sLNV/G1oXBWqqixdoSKkQu1ct1gH5MTmUrlmNiUfhm587/MOnhFiifl+oTtp2SGDMUisvIoT6s9nkBY+xcYZU4BYLq4i+n8AjnVxcrtGu+GCjrQsULlxaA0BOjMvgzQIy//WMJSsjqBT0CMZlsZL01iiA/Kj+KXP9IbmZ7r91ghi5Q9OOCGfSe8GN9NW/45wN6Sq1C/HcKz4GABRx8dmhZtg9tkoGFF+lkW4tnpd1sekumb0O92aethUOtpRtmPAvfA/uIafGlXdOel7HsjvgHE7H+r+H2J47ERNvtwfwkNcdicE06Kxy0hOFyEL13ew28CG9H9a4+5nFfdIwq3qjl1DPkTT1K1tMpDZSIpSQUdFkxSjAYP2wfZDlFE82HwI2PzJ80rN0mvWtKp+dDWitMxgwR8u0+XZwAe76XfmcKQMKS2ZWCagn2QoCigUWeg+imggwkh3vvlZc1JUZp4vwqTlalODL+JdbavdzJ9icuB2E/L21SdFEyC0N/qSKjRHMCoAVjN/KueNDq5wdo4MHMoJN9ReY6g5uZ7WtfMQeUsQ8sz/cKfzSSHES1AN4t7qYUiWFygdzO7RUFODBHoHh6EOyarNdZkqrn0EVlk3KlOCc1TeKJPpDLEdqC2fU/6TvHRM0mGZj4lq5e84X4xcaNKddgDkqJ8L0sBE2imDRuLQURKEbFrLm30SuWWP1FraSAnC7YS6XIrhnPGBWUHDbiHCYwgSOcFquQzH5xJ6bufJ7hSvi9KDmSHlTR7gthn2WaIzkM3L3Hf859/D3GjczyS+KZQg+27GGoKBu4/pft/Jql1mHE6ioi2ozLtDN2j98EsTFu9ejvn9I8jor/24NyKBeo6CFVQb1h5tqkAIhWR6CmBk0i8aZMRYwwnDX1zpbAI7khOeTj7YNeLJGPTSrNBNNVC5CXCiKUSui9HqV16+sRJstD/eQcWqpepvlrSXHeWWDscCCRN63S6q1Hx8Z+p6CUxSpJ6hm2zZKpSePeUKaz83RVC0DHbqgHAGe0/OB5o8OL0ksAtElo17Lj0++q5xQ8vhbHTqchN1NKXAxXXtt94g0LtCi5lz57q4v39ll55jT6x1IwTJ8u4o0JoWtiDm7fIE3SXWY7tKJrFiQFAM3qfGNyA/ivKMeEwIIeBhq86IauSm4ALn92bBLIgWp/hWpRF7vslK/RLAlDcLXgwDo7wRvuBX1Ckw1aezkEQZBAbHIyNY25bnLre4hFtyUGNqvr6vwLjsQ3TrXN8Or/1zshTbfMNz/bDnbUdbtsaqqfqtOVV1eb7f7HE0bRZZ1b6diWCnpi7vp09Cu7GVhiCVhm7t6fDO+seyc6toMwb+PTc82MVNknBsxk9JuV0OwAYJ2roc+G0LcGPNHKD0rBo9shX9dzK4hnz+J/xzIhIuP31ly9t03ipLBBzJOtlOaWYBGkRYKOABGgh6NSczGWcKlkvuODzru8G4="
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019faad2-3853-7541-badb-efb50fd88008-0",
+            "usage_metadata": {
+              "input_tokens": 284,
+              "output_tokens": 413,
+              "total_tokens": 697,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 328
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "f59ed56482ac0cc8",
+  "recorded_at": "2026-07-28T22:22:31+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'$defs': {'Patch': {'description': 'One structured edit to one file — a search/replace, not raw diff syntax.\\n\\nThe EDITOR emits these because asking a model (a weak local one especially) for\\nvalid unified-diff text is brittle; the diff is *built* deterministically from\\nthe edits (``tools/patch.py``) and only then checked with ``git apply --check``.\\n``old_string`` must occur exactly once in the target file so the edit is\\nunambiguous.', 'properties': {'path': {'title': 'Path', 'type': 'string'}, 'old_string': {'title': 'Old String', 'type': 'string'}, 'new_string': {'title': 'New String', 'type': 'string'}, 'rationale': {'default': '', 'title': 'Rationale', 'type': 'string'}}, 'required': ['path', 'old_string', 'new_string'], 'title': 'Patch', 'type': 'object'}}, 'description': \"The EDITOR's output for a plan step (cahier §4/A3).\\n\\nStructured edits the editor never writes to disk itself — ``tools/patch.py``\\nturns them into a diff and dry-runs ``git apply --check`` in the session\\nworktree; a patch that fails the check never reaches a human.\", 'properties': {'summary': {'default': '', 'title': 'Summary', 'type': 'string'}, 'patches': {'items': {'$ref': '#/$defs/Patch'}, 'title': 'Patches', 'type': 'array'}}, 'title': 'PatchSet', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the EDITOR for FORGE. Given a plan step and the current contents of the target file, produce a PatchSet of minimal search/replace edits. Each patch's old_string must be an EXACT, UNIQUE substring of the file \\u2014 copy it verbatim, including indentation \\u2014 and new_string is its replacement. Change only what the step requires. Never output diff syntax; only the structured edits.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Target file: sqlparse/filters/tokens.py\\nStep: format(sql, truncate_strings=3) truncates one character too early: \\\"select 'abcdefghij'\\\" gives 'ab[...]' when it should give 'abc[...]'. The truncated string should keep exactly `truncate_strings` characters.\\n\\n<file>\\n#\\n# Copyright (C) 2009-2020 the sqlparse authors and contributors\\n# <see AUTHORS file>\\n#\\n# This module is part of python-sqlparse and is released under\\n# the BSD License: https://opensource.org/licenses/BSD-3-Clause\\n\\nfrom sqlparse import tokens as T\\n\\n\\nclass _CaseFilter:\\n    ttype = None\\n\\n    def __init__(self, case=None):\\n        case = case or 'upper'\\n        self.convert = getattr(str, case)\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype:\\n                value = self.convert(value)\\n            yield ttype, value\\n\\n\\nclass KeywordCaseFilter(_CaseFilter):\\n    ttype = T.Keyword\\n\\n\\nclass IdentifierCaseFilter(_CaseFilter):\\n    ttype = T.Name, T.String.Symbol\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype and value.strip()[0] != '\\\"':\\n                value = self.convert(value)\\n            yield ttype, value\\n\\n\\nclass TruncateStringFilter:\\n    def __init__(self, width, char):\\n        self.width = width\\n        self.char = char\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype != T.Literal.String.Single:\\n                yield ttype, value\\n                continue\\n\\n            if value[:2] == \\\"''\\\":\\n                inner = value[2:-2]\\n                quote = \\\"''\\\"\\n            else:\\n                inner = value[1:-1]\\n                quote = \\\"'\\\"\\n\\n            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\\n            yield ttype, value\\n\\n</file>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"summary\":\"Fix TruncateStringFilter to preserve exactly truncate_strings characters when truncating.\",\"patches\":[{\"path\":\"sqlparse/filters/tokens.py\",\"old_string\":\"                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\",\"new_string\":\"                value = ''.join((quote, inner[:self.width], self.char, quote))\",\"rationale\":\"Truncating with inner[:self.width - 1] kept one character less than self.width. Changing it to inner[:self.width] retains exactly truncate_strings characters.\"}]}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"summary\":\"Fix TruncateStringFilter to preserve exactly truncate_strings characters when truncating.\",\"patches\":[{\"path\":\"sqlparse/filters/tokens.py\",\"old_string\":\"                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\",\"new_string\":\"                value = ''.join((quote, inner[:self.width], self.char, quote))\",\"rationale\":\"Truncating with inner[:self.width - 1] kept one character less than self.width. Changing it to inner[:self.width] retains exactly truncate_strings characters.\"}]}",
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019faad2-74ec-7f70-a3a4-66d851569e92-0",
+            "usage_metadata": {
+              "input_tokens": 586,
+              "output_tokens": 933,
+              "total_tokens": 1519,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 805
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}
