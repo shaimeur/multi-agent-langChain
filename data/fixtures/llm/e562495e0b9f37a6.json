@@ -1,0 +1,73 @@
+{
+  "namespace": "llm",
+  "key": "e562495e0b9f37a6",
+  "recorded_at": "2026-07-29T13:21:39+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'$defs': {'CitationRef': {'description': \"A plan step's evidence: the retrieved chunk it relies on.\\n\\nThe PLANNER must cite at least one per step, and each must resolve into the\\nContextPack — a step that cites nothing, or cites a chunk that was never\\nretrieved, is rejected *before any code is written* (cahier §4/A2). This is the\\nsame groundedness discipline as a citation, applied to a plan.\", 'properties': {'chunk_id': {'title': 'Chunk Id', 'type': 'string'}, 'why': {'default': '', 'title': 'Why', 'type': 'string'}}, 'required': ['chunk_id'], 'title': 'CitationRef', 'type': 'object'}, 'PlanStep': {'description': 'One atomic change to one file, with the evidence that justifies it.', 'properties': {'intent': {'title': 'Intent', 'type': 'string'}, 'target_path': {'title': 'Target Path', 'type': 'string'}, 'evidence': {'items': {'$ref': '#/$defs/CitationRef'}, 'title': 'Evidence', 'type': 'array'}, 'rationale': {'default': '', 'title': 'Rationale', 'type': 'string'}}, 'required': ['intent', 'target_path'], 'title': 'PlanStep', 'type': 'object'}}, 'description': \"The PLANNER's output: an ordered, citation-backed plan (cahier §4/A2).\\n\\n``needs_more_context`` lets the planner send the turn back to the RETRIEVER\\ninstead of guessing, with ``missing`` describing what to look for — the\\n``needs_more_context`` loop of §5.1, capped so it cannot ping-pong.\", 'properties': {'summary': {'default': '', 'title': 'Summary', 'type': 'string'}, 'steps': {'items': {'$ref': '#/$defs/PlanStep'}, 'title': 'Steps', 'type': 'array'}, 'blast_radius': {'items': {'type': 'string'}, 'title': 'Blast Radius', 'type': 'array'}, 'needs_more_context': {'default': False, 'title': 'Needs More Context', 'type': 'boolean'}, 'missing': {'default': '', 'title': 'Missing', 'type': 'string'}}, 'title': 'ChangePlan', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the PLANNER for FORGE. Given a change request and numbered code snippets, produce an ordered ChangePlan: each step names the single file it edits (target_path), says what to change (intent), and lists in `evidence` the snippet NUMBER(S) that justify it \\u2014 put the number as a string in each evidence item's chunk_id (e.g. \\\"2\\\"). Cite only snippets you were given. If the snippets are not enough to plan the change, set needs_more_context=true and describe what is missing. Do not write code; only plan.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"<context>\\n\\n</context>\\n\\nChange request: hey there my name is saad how are u\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"summary\":\"Greeting received. No code changes were requested.\",\"steps\":[],\"blast_radius\":[],\"needs_more_context\":false}",
+        "generation_info": {
+          "safety_ratings": [],
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash"
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"summary\":\"Greeting received. No code changes were requested.\",\"steps\":[],\"blast_radius\":[],\"needs_more_context\":false}",
+                "index": 0,
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "safety_ratings": [],
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fae09-a497-7a31-9256-587694ff72be",
+            "usage_metadata": {
+              "input_tokens": 144,
+              "output_tokens": 521,
+              "total_tokens": 665,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 492
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

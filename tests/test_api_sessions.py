@@ -14,14 +14,17 @@ from __future__ import annotations
 
 import json
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from forge.api import main as api_main
 from forge.api.sessions import reset_store
+from forge.api.streaming import graph_events
 from forge.core.state import ForgeState
 
 
@@ -171,6 +174,66 @@ def test_a_node_frame_summarises_rather_than_dumping_state(client):
 
     assert node["data"]["node"] == "worker"
     assert node["data"]["patch_ok"] is True
+
+
+class _OneMessageGraph:
+    """The smallest thing ``graph_events`` will stream: one model message, then end.
+
+    ``stream_mode="messages"`` frames cannot be produced by a scripted node graph —
+    they come from a model call — so the provider's content shape is faked here
+    instead. That shape is the whole point of the test.
+    """
+
+    def __init__(self, content):
+        self._content = content
+
+    def astream(self, payload, config=None, stream_mode=None):
+        content = self._content
+
+        async def _stream():
+            yield "messages", (AIMessage(content=content), {})
+
+        return _stream()
+
+    async def aget_state(self, config):
+        return SimpleNamespace(next=(), tasks=())
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param("plain text", id="str"),
+        pytest.param([{"type": "text", "text": "plain text"}], id="gemini-3x-blocks"),
+        pytest.param(
+            [
+                {"type": "reasoning", "extras": {"signature": "opaque"}},
+                {"type": "text", "text": "plain "},
+                {"type": "text", "text": "text"},
+            ],
+            id="blocks-with-reasoning",
+        ),
+    ],
+)
+async def test_a_token_frame_carries_flat_text_whatever_shape_the_provider_returned(content):
+    """Gemini 3.x returns content blocks; forwarding them raw rendered "[object Object]".
+
+    The client is entitled to a string — this module promises normalised frames, and a
+    UI should not have to know one provider's block schema to print a reply.
+    """
+    frames = [event async for event in graph_events(_OneMessageGraph(content), {}, {})]
+    tokens = [f for f in frames if f.type == "token"]
+
+    assert [f.data["text"] for f in tokens] == ["plain text"]
+    assert all(isinstance(f.data["text"], str) for f in tokens)
+
+
+async def test_a_reasoning_only_message_emits_no_token_frame():
+    """Blocks carrying no answer text flatten to "", which must not become an empty bubble."""
+    graph = _OneMessageGraph([{"type": "reasoning", "extras": {"signature": "opaque"}}])
+
+    frames = [event async for event in graph_events(graph, {}, {})]
+
+    assert not [f for f in frames if f.type == "token"]
 
 
 def test_a_failing_graph_ends_the_stream_with_a_typed_error(client):

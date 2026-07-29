@@ -1,0 +1,73 @@
+{
+  "namespace": "llm",
+  "key": "09522130cb9134ff",
+  "recorded_at": "2026-07-29T13:12:45+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'$defs': {'CitationRef': {'description': \"A plan step's evidence: the retrieved chunk it relies on.\\n\\nThe PLANNER must cite at least one per step, and each must resolve into the\\nContextPack — a step that cites nothing, or cites a chunk that was never\\nretrieved, is rejected *before any code is written* (cahier §4/A2). This is the\\nsame groundedness discipline as a citation, applied to a plan.\", 'properties': {'chunk_id': {'title': 'Chunk Id', 'type': 'string'}, 'why': {'default': '', 'title': 'Why', 'type': 'string'}}, 'required': ['chunk_id'], 'title': 'CitationRef', 'type': 'object'}, 'PlanStep': {'description': 'One atomic change to one file, with the evidence that justifies it.', 'properties': {'intent': {'title': 'Intent', 'type': 'string'}, 'target_path': {'title': 'Target Path', 'type': 'string'}, 'evidence': {'items': {'$ref': '#/$defs/CitationRef'}, 'title': 'Evidence', 'type': 'array'}, 'rationale': {'default': '', 'title': 'Rationale', 'type': 'string'}}, 'required': ['intent', 'target_path'], 'title': 'PlanStep', 'type': 'object'}}, 'description': \"The PLANNER's output: an ordered, citation-backed plan (cahier §4/A2).\\n\\n``needs_more_context`` lets the planner send the turn back to the RETRIEVER\\ninstead of guessing, with ``missing`` describing what to look for — the\\n``needs_more_context`` loop of §5.1, capped so it cannot ping-pong.\", 'properties': {'summary': {'default': '', 'title': 'Summary', 'type': 'string'}, 'steps': {'items': {'$ref': '#/$defs/PlanStep'}, 'title': 'Steps', 'type': 'array'}, 'blast_radius': {'items': {'type': 'string'}, 'title': 'Blast Radius', 'type': 'array'}, 'needs_more_context': {'default': False, 'title': 'Needs More Context', 'type': 'boolean'}, 'missing': {'default': '', 'title': 'Missing', 'type': 'string'}}, 'title': 'ChangePlan', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the PLANNER for FORGE. Given a change request and numbered code snippets, produce an ordered ChangePlan: each step names the single file it edits (target_path), says what to change (intent), and lists in `evidence` the snippet NUMBER(S) that justify it \\u2014 put the number as a string in each evidence item's chunk_id (e.g. \\\"2\\\"). Cite only snippets you were given. If the snippets are not enough to plan the change, set needs_more_context=true and describe what is missing. Do not write code; only plan.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"<context>\\n\\n</context>\\n\\nChange request: how does hybrid search combine dense and sparse results?\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"summary\":\"Context missing for hybrid search implementation\",\"steps\":[],\"blast_radius\":[],\"needs_more_context\":true,\"missing\":\"Source code modules or files implementing hybrid search, dense search, sparse search, and result fusion/scoring algorithms.\"}",
+        "generation_info": {
+          "safety_ratings": [],
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash"
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"summary\":\"Context missing for hybrid search implementation\",\"steps\":[],\"blast_radius\":[],\"needs_more_context\":true,\"missing\":\"Source code modules or files implementing hybrid search, dense search, sparse search, and result fusion/scoring algorithms.\"}",
+                "index": 0,
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "safety_ratings": [],
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fae01-7a4f-7423-9861-2afa71b2101e",
+            "usage_metadata": {
+              "input_tokens": 145,
+              "output_tokens": 655,
+              "total_tokens": 800,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 604
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

@@ -27,6 +27,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from forge.llm.output import content_to_text
+
 
 class StreamEvent(BaseModel):
     """One SSE frame. ``data`` is always a JSON object, never a bare string."""
@@ -95,7 +97,10 @@ async def graph_events(graph, payload, config) -> AsyncIterator[StreamEvent]:
                     yield StreamEvent(type="node", data=_summarise(node, delta))
             elif mode == "messages":
                 message, _meta = chunk if isinstance(chunk, tuple) else (chunk, {})
-                text = getattr(message, "content", "")
+                # Gemini 3.x hands back a list of content blocks, not a str. Forwarding
+                # it raw makes every client stringify an array — the UI rendered
+                # "[object Object]". Flatten here: this module owns normalisation.
+                text = content_to_text(getattr(message, "content", ""))
                 if text:
                     yield StreamEvent(type="token", data={"text": text})
 
