@@ -279,15 +279,17 @@ fixture store — a FixtureMiss in an unrelated file. `reset_llm_cache()` + an a
 ### [ ] D13 · Web UI — **React (O1 resolved 2026-07-24: the cahier's original)**
 
 - [x] Resolve **O1** — *"If React is mandatory, this day becomes two and something from the cut list goes."* It is. Budget accordingly: D13 is the two-day version and only three days remain
-- [ ] `web/` — Vite + TS + Tailwind, a separate build from the Python package (not served by `api`)
-- [ ] Streamed chat against `POST /v1/sessions/{id}/messages` — the SSE frames are already typed (`node`/`token`/`interrupt`/`done`/`error`), so the client renders frames rather than parsing LangGraph
-- [ ] Agent activity timeline off the `node` frames — the visual proof of multi-agent
-- [ ] Plan-approval modal and patch-approval modal → `POST /v1/sessions/{id}/approve`; the `interrupt` frame already carries the payload each one needs to render
-- [ ] Diff viewer, citations panel, test-results panel (red → green), sessions sidebar
+- [x] `web/` — Vite + TS + Tailwind, a separate build from the Python package (not served by `api`); `npm run build` (`tsc -b && vite build`) → exit 0, oxlint clean
+- [x] Streamed chat against `POST /v1/sessions/{id}/messages` — the typed SSE frames (`node`/`token`/`interrupt`/`done`/`error`) are parsed off a `fetch` ReadableStream (EventSource can't POST); tokens stream into a live bubble
+- [x] Agent activity timeline off the `node` frames — the visual proof of multi-agent
+- [x] Plan-approval modal and patch-approval modal → `POST /v1/sessions/{id}/approve`; the `interrupt` frame carries the payload each renders (plan table / coloured diff)
+- [x] Diff viewer, test-results panel (red → green), sessions sidebar — **citations panel still to add**
 - [ ] ~~Metrics page~~ — cut-list item 4. `GET /v1/metrics` exists if the day runs long enough to use it
 
 **DoD: the full §15.6 demo scenario runs in the browser with no terminal.**
 **Depends on B2** — the browser scenario needs a real model, not a scripted one.
+**Status (2026-07-29):** frontend implemented and builds (committed `web/`, `125c5db`). The in-browser
+§15.6 run is **unrun** — it needs a live API + a real model, so it lands when the daily quota resets.
 
 ---
 

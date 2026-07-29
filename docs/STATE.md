@@ -29,9 +29,10 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
 - [x] Full suite — `CACHE_MODE=replay uv run pytest` → exit 0 (359 passed, 6 skipped); ruff clean
 
 ## In progress
-- **D13 Web UI** — O1 RESOLVED: **React + Vite + TS** (02261ef, descope §2). API ready (sessions, SSE,
-  approve, history, metrics — all tested). Next: scaffold `web/` (Vite+TS+Tailwind, `react-diff-viewer`
-  /Monaco) against `/v1/*`; then C7 records the §15.6 4-min run to `docs/demo.mp4`.
+- **D13 Web UI — frontend built** (125c5db) — `web/` React+Vite+TS+Tailwind: sessions sidebar,
+  SSE-streamed chat, agent timeline, plan/patch approval modals, diff + tests panels. `npm run build`
+  (`tsc -b && vite build`) → exit 0, oxlint clean. `web/` is a separate build; dev proxies `/v1` → :8000.
+  Remaining: citations panel + the in-browser §15.6 run (**C7**) — needs a live API + real model (quota).
 - **Full graph reached the editor on a real model** (2026-07-29) — fixed the planner drowning in the
   ~40-chunk pack (cap 8, `planner.py`); a real run went planner → both gates (auto-approved) →
   regression → editor before the daily quota hit. Back half (editor/tester/reviewer) proven by swe_mini.
