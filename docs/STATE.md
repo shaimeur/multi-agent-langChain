@@ -32,9 +32,10 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
 - **D13 Web UI** — O1 RESOLVED: **React + Vite + TS** (02261ef, descope §2). API ready (sessions, SSE,
   approve, history, metrics — all tested). Next: scaffold `web/` (Vite+TS+Tailwind, `react-diff-viewer`
   /Monaco) against `/v1/*`; then C7 records the §15.6 4-min run to `docs/demo.mp4`.
-- **Planner + full graph never hit a real model** — swe_mini drives `build_implement_loop` with a
-  hand-built `ChangePlan`; the PLANNER and end-to-end `forge fix` (supervisor→planner→gates→reviewer)
-  are still scripted-model only. Needed for C2/C7. Next: run `forge fix` once with the real model.
+- **Full graph reached the editor on a real model** (2026-07-29) — fixed the planner drowning in the
+  ~40-chunk pack (cap 8, `planner.py`); a real run went planner → both gates (auto-approved) →
+  regression → editor before the daily quota hit. Back half (editor/tester/reviewer) proven by swe_mini.
+  Remaining: one contiguous green run + trace capture (C2/C7) once quota resets. Driver in scratchpad.
 - **Carried**: `notebooks/02_agent_traces.ipynb` (C2 — now unblocked, real traces exist) · `forge tools`
   listing 10 (C6, settle O2 wording) · `forge review` standalone.
 
@@ -44,6 +45,8 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
   `GEMINI_CODER_MODEL=GEMINI_REASONER_MODEL=gemini-flash-latest`, or re-record under the pinned model.
 - **.env**: `QDRANT_URL=http://localhost:6333` breaks offline `forge ask` (no server) — blank it for the
   embedded index, or `docker compose up qdrant`. (`WORKSPACE_ROOT` relative is now handled in code.)
+- **Free-tier daily quota ≈ 20 requests/day PER MODEL** (gemini-3.6-flash, via `flash-latest`, exhausted
+  2026-07-29). Real runs are severely rate-limited → record fixtures early and demo in replay.
 - **O5** injection tier 2 (descope entry needed, frozen → human) · **O4** reviewer/editor same family,
   one provider · **O2** C6 "Tools AND MCP" wording · **O3** `make lint` red pre-D7 (`make fmt` fixes) ·
   **B3** `qwen2.5-coder:7b` unpulled.
@@ -57,6 +60,9 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
   drift, is why swe_mini read "unsound". Real swe_mini runs need `SANDBOX_BACKEND=docker`.
 - **Gemini models**: `gemini-2.5-*` **404 for keys created after Google's mid-2026 cutover**; use the 3.5
   tier / `-latest` aliases. New keys look like `AQ.Ab…`, not `AIza…`. `.content` is a block list (above).
+- **Planner context**: capped to top-8 (`planner.py _MAX_SNIPPETS`) — the full ~40-chunk pack makes a
+  thinking model return an empty `ChangePlan`. **`forge fix` wires no retriever**, so its planner starts
+  on an empty pack and dead-ends at END; wire `retriever_node` into its `build_change_graph` call.
 - **`build_llm` installs a process-global LangChain cache**; `reset_llm_cache()` + autouse conftest undo
   it. Guardrail log never raises. SSE frames CRLF. Sandbox: `RLIMIT_DATA`, exit-code is authority, image
   is dep-free (pytest/ruff only), `/work` = the bind-mounted worktree. sqlparse @0d24023.

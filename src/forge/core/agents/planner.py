@@ -56,9 +56,19 @@ def _remap_evidence(plan: ChangePlan, pack: ContextPack) -> ChangePlan:
     return plan
 
 
+# The retriever packs to the answerer's token budget — ~40 chunks — which is right for
+# free-text grounding but drowns the planner: a thinking model handed that much context
+# returns an *empty* ChangePlan (the structured-output extraction gives up). Focus it on
+# the top snippets by fused rank; the target is always first, and if they are not enough
+# the planner sets needs_more_context and delegates back to the retriever anyway.
+_MAX_SNIPPETS = 8
+
+
 def plan_change(llm: BaseChatModel, request: str, pack: ContextPack) -> ChangePlan:
     """Ask for a ChangePlan and remap its evidence to chunk_ids. The caller enforces
     the grounding rule via ``ChangePlan.ungrounded_steps``."""
+    if len(pack.chunks) > _MAX_SNIPPETS:
+        pack = pack.model_copy(update={"chunks": pack.chunks[:_MAX_SNIPPETS]})
     planner = llm.with_structured_output(ChangePlan)
     plan = planner.invoke(_messages(request, pack))
     if not isinstance(plan, ChangePlan):
