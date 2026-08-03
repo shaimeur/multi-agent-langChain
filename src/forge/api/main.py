@@ -428,12 +428,18 @@ def metrics(session_id: str | None = None) -> MetricsResponse:
     store_ = get_store(get_settings())
     sessions = [s for s in store_.list() if session_id is None or s.session_id == session_id]
 
+    log = get_log(get_settings())
     totals = SessionMetrics()
     for session in sessions:
+        # The counter lives in the guardrail log, not on the session — nothing was
+        # filling this field in, so a per-session view reported 0 while the log itself
+        # had events to show. Read it from the one place that actually knows.
+        session.metrics.guardrail_events = log.count(session_id=session.session_id)
         totals.turns += session.metrics.turns
         totals.llm_calls += session.metrics.llm_calls
         totals.tokens += session.metrics.tokens
         totals.errors += session.metrics.errors
+        totals.guardrail_events += session.metrics.guardrail_events
         totals.latency_ms_total += session.metrics.latency_ms_total
         totals.latency_ms_last = session.metrics.latency_ms_last or totals.latency_ms_last
 
@@ -441,7 +447,7 @@ def metrics(session_id: str | None = None) -> MetricsResponse:
         sessions=len(sessions),
         totals=totals,
         per_session={s.session_id: s.metrics for s in sessions},
-        guardrail_events=get_log(get_settings()).count(session_id=session_id),
+        guardrail_events=log.count(session_id=session_id),
     )
 
 
@@ -503,14 +509,26 @@ def ask(request: AskRequest) -> GroundedAnswer:
         # silent empty answer — the event is already in the log either way.
         raise HTTPException(status_code=400, detail=decision.reason)
 
-    answer = answer_question(
-        decision.text,
-        k=request.k,
-        settings=settings,
-        client=resources["client"],
-        embedder=resources["embedder"],
-        encoder=resources["encoder"],
-    )
+    # An ask turn spends a model call like any other, so it is counted like any other.
+    # Without this the Cost panel reads all zeros for a session that only ever asked —
+    # which reads as "free", not as "not measured".
+    session = get_store(settings).get(request.session_id) if request.session_id else None
+    with Timer() as timer:
+        try:
+            answer = answer_question(
+                decision.text,
+                k=request.k,
+                settings=settings,
+                client=resources["client"],
+                embedder=resources["embedder"],
+                encoder=resources["encoder"],
+            )
+        except Exception:
+            if session:
+                session.metrics.errors += 1
+            raise
+    if session:
+        session.metrics.record_turn(duration_ms=timer.ms, llm_calls=1)
     # pack=None: this path verifies citations inside answer_question and does not
     # hand the pack back, so sentinel_out scans for secrets and leaves them alone
     # rather than re-checking against a pack it does not have.

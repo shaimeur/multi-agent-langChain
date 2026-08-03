@@ -97,3 +97,28 @@ def test_ask_route_returns_a_grounded_answer(monkeypatch):
     body = response.json()
     assert body["grounded"] is True
     assert body["citations"][0]["path"] == "sqlparse/engine/statement_splitter.py"
+
+
+def test_an_ask_turn_is_counted_against_its_session(monkeypatch):
+    """§15.6 ends on "le détail des coûts", and a panel of zeros reads as *free*.
+
+    An ask spends a model call like any other turn. Nothing was recording it, so a
+    session that only ever asked reported turns=0 — indistinguishable from a session
+    that had done nothing at all.
+    """
+    from forge.models import GroundedAnswer
+
+    monkeypatch.setattr(
+        "forge.api.main.answer_question",
+        lambda *a, **k: GroundedAnswer(question="q", answer="a", grounded=False),
+    )
+    session_id = client.post("/v1/sessions", json={}).json()["session_id"]
+
+    client.post("/v1/ask", json={"question": "what splits statements", "session_id": session_id})
+
+    metrics = client.get(f"/v1/metrics?session_id={session_id}").json()
+    per_session = metrics["per_session"][session_id]
+    assert per_session["turns"] == 1
+    assert per_session["llm_calls"] == 1
+    # The guardrail counter lives in the log; the per-session view has to read it there.
+    assert per_session["guardrail_events"] == metrics["guardrail_events"] > 0
