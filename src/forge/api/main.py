@@ -177,9 +177,13 @@ def _build_graph(session, settings: Settings, checkpointer):
     if _graph_factory is not None:
         return _graph_factory(session, settings, checkpointer)
     from forge.config import LLMRole
+    from forge.core.graph import build_default_retriever
     from forge.core.loop import build_change_graph
     from forge.llm.provider import build_llm
 
+    # Share the cached client/embedder/encoder — an embedded Qdrant permits one
+    # client per path per process, and /v1/search already holds it.
+    resources = get_resources()
     return build_change_graph(
         planner_llm=build_llm(LLMRole.REASONER, settings=settings),
         coder_llm=build_llm(LLMRole.CODER, settings=settings),
@@ -187,6 +191,12 @@ def _build_graph(session, settings: Settings, checkpointer):
         workspace=session.workspace,
         settings=settings,
         checkpointer=checkpointer,
+        retriever_node=build_default_retriever(
+            settings,
+            client=resources["client"],
+            embedder=resources["embedder"],
+            encoder=resources["encoder"],
+        ),
     )
 
 

@@ -15,11 +15,13 @@ from __future__ import annotations
 import subprocess
 
 import pytest
+from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END
 from langgraph.types import Command
 
 from forge.config import CacheMode, Settings
+from forge.core.agents.base import latest_user_text
 from forge.core.agents.reviewer import (
     check_grounding,
     check_security,
@@ -523,3 +525,52 @@ def test_rejecting_the_patch_needs_no_rollback(workspace, settings):
 
     assert final["approvals"] == ["plan:approved", "patch:rejected"]
     assert workspace.read("calc.py") == BUGGY, "the worktree never changed"
+
+
+# --- the retriever entry --------------------------------------------------
+
+
+def test_the_change_graph_retrieves_before_it_plans(workspace, settings):
+    """A run that starts from a bare request reaches the planner already grounded.
+
+    The regression this pins: `forge fix` and the API built this graph with no
+    retriever, so the planner opened on an empty ``<context></context>``, answered
+    needs_more_context by construction, and the run dead-ended at END having written
+    nothing — the observed failure in both recorded web-UI fixtures. Entering at the
+    planner even *with* a retriever wired is only marginally better: it spends a model
+    call to discover what the graph already knew, and on a rate-limited key that call
+    is the scarce resource.
+    """
+    llm = _scripted_run()
+    seen: list[str] = []
+
+    def spy_retriever(state):
+        seen.append(latest_user_text(state))
+        return {"pack": _pack()}
+
+    graph = build_change_graph(
+        planner_llm=llm,
+        coder_llm=llm,
+        reviewer_llm=llm,
+        workspace=workspace,
+        settings=settings,
+        checkpointer=MemorySaver(serde=forge_serde()),
+        retriever_node=spy_retriever,
+    )
+    config = {"configurable": {"thread_id": "retrieve-first"}}
+
+    # No pack in the input — exactly how the CLI and the API start a run.
+    first = graph.invoke(
+        {
+            "messages": [HumanMessage(content="add() subtracts")],
+            "budget": Budget(),
+            "iterations": 0,
+        },
+        config=config,
+    )
+
+    assert seen == ["add() subtracts"], "the retriever ran first, once, on the request"
+    assert first["__interrupt__"][0].value["kind"] == "plan_approval", "it reached the plan gate"
+    assert llm.prompts, "the planner was called"
+    assert "<context>\n\n</context>" not in llm.prompts[0], "the planner never saw an empty pack"
+    assert BUGGY.strip() in llm.prompts[0], "the retrieved code was in the planner's first prompt"

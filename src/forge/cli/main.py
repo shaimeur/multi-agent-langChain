@@ -246,6 +246,10 @@ async def _ask_graph(question: str, session_id: str) -> GroundedAnswer:
 def _fix_step_line(node: str, delta: dict) -> str:
     """One line of the change-path timeline. Mirrors `_step_line` for the Q&A graph."""
     delta = delta or {}
+    if node == "retriever":
+        pack = delta.get("pack")
+        n = len(getattr(pack, "chunks", []) or [])
+        return f"[cyan]●[/] retriever · {n} chunks packed"
     if node == "planner":
         plan = delta.get("plan")
         steps = getattr(plan, "steps", []) or []
@@ -303,6 +307,7 @@ async def _run_fix(request: str, session_id: str) -> int:
 
     from forge.config import LLMRole
     from forge.core.checkpoint import sqlite_checkpointer
+    from forge.core.graph import build_default_retriever
     from forge.core.loop import build_change_graph
     from forge.core.workspace import session_workspace
     from forge.llm.provider import build_llm
@@ -331,6 +336,20 @@ async def _run_fix(request: str, session_id: str) -> int:
         )
         return 1
 
+    try:
+        with console.status("Loading the index..."):
+            retriever = build_default_retriever(settings)
+    except Exception as error:
+        # A missing index is a different failure from a missing key and deserves its
+        # own sentence: the planner can only cite what was ingested, so pointing the
+        # user at their API key here would send them to the wrong knob.
+        console.print(
+            f"[red]No usable index for '{settings.target_repo}'.[/]\n"
+            f"  {str(error).splitlines()[0][:160]}\n"
+            "  Run `forge index` first, or point QDRANT_URL/QDRANT_PATH at the index."
+        )
+        return 1
+
     config = {"configurable": {"thread_id": session_id}}
     with session_workspace(session_id, settings=settings) as workspace:
         async with sqlite_checkpointer(settings.checkpoint_db) as checkpointer:
@@ -341,6 +360,7 @@ async def _run_fix(request: str, session_id: str) -> int:
                 workspace=workspace,
                 settings=settings,
                 checkpointer=checkpointer,
+                retriever_node=retriever,
             )
             payload: object = {
                 "messages": [HumanMessage(content=request)],

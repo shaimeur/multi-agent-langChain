@@ -96,6 +96,40 @@ async def run_turn(graph, question: str, *, session_id: str) -> ForgeState:
     )
 
 
+def build_default_retriever(
+    settings: Settings | None = None,
+    *,
+    client: Any | None = None,
+    embedder: Embedder | None = None,
+    encoder: BM25Encoder | None = None,
+    collection: str = store.CODE_COLLECTION,
+    token_budget: int = DEFAULT_TOKEN_BUDGET,
+) -> Callable:
+    """The RETRIEVER node alone, over real resources — what the *change* path needs.
+
+    ``build_default_nodes`` also builds the ROUTER and REASONER models for the ask
+    path; ``forge fix`` and the API already hold their own models and only want
+    retrieval, so building the rest would cost two model handles for nothing.
+
+    Resources are injectable because an *embedded* Qdrant allows exactly one client
+    per path per process: a caller that already keeps one (the API's cached
+    ``get_resources``) must pass it rather than let this open a second.
+    """
+    from forge.rag.embed import build_embedder
+
+    settings = settings or get_settings()
+    client = client if client is not None else store.build_client(settings)
+    return make_retriever_node(
+        settings=settings,
+        client=client,
+        embedder=embedder if embedder is not None else build_embedder(settings),
+        encoder=encoder if encoder is not None else load_encoder(settings),
+        repo=settings.target_repo,
+        collection=collection,
+        token_budget=token_budget,
+    )
+
+
 def build_default_nodes(settings: Settings | None = None, *, client: Any | None = None) -> dict:
     """The real nodes: Qdrant + the configured embedder + the ROUTER/REASONER models.
 

@@ -2,11 +2,16 @@
 
 The loop (D8), and around it the two human gates and the real reviewer (D9):
 
-    START → planner → ╔plan_approval╗ → regression → editor → ╔patch_approval╗
-                                                        ↑                  ↓
-                      END ← reviewer ← verify ←────── apply ←──────────────┘
-                             │  │
-              escalate ←─────┘  └──→ editor   (REVISE, capped)
+    START → retriever → planner → ╔plan_approval╗ → regression → editor → ╔patch_approval╗
+               ↑           │                                         ↑                  ↓
+               └───────────┘        END ← reviewer ← verify ←────── apply ←─────────────┘
+            (needs_more_context)           │  │
+                                escalate ←─┘  └──→ editor   (REVISE, capped)
+
+The retriever is optional — a caller that already holds a ``ContextPack`` (the tests,
+and any graph that retrieved earlier in the turn) omits it and the graph starts at the
+planner. Every caller that starts from a bare request must pass one, or the planner
+opens on an empty pack and the run dead-ends with nothing to cite.
 
 ``editor`` builds a ``PatchSet`` and dry-runs ``git apply --check``; it **never
 writes**. ``apply`` is the only node that touches disk, and the approval gate sits
@@ -177,11 +182,17 @@ def build_change_graph(
             llm=planner_llm,
             success_node="plan_approval",
             # With no retriever wired, needs_more_context has nowhere to go but out.
-            # Ending is the honest answer: D12 wires the retriever into this graph.
+            # Ending is the honest answer — the caller gave the planner no way to look
+            # anything up. Callers that want a plan pass ``retriever_node``.
             retry_node="retriever" if retriever_node is not None else END,
             max_reentries=1 if retriever_node is not None else 0,
         ),
     )
 
-    graph.add_edge(START, "planner")
+    # Retrieve *before* planning when we can. Entering at the planner would spend a
+    # model call on an empty pack, which returns needs_more_context by construction —
+    # the retry edge would then reach the retriever, but a whole call later and with
+    # the re-entry budget already half spent. The planner's own retry loop is for
+    # context that turned out to be insufficient, not for the first look.
+    graph.add_edge(START, "retriever" if retriever_node is not None else "planner")
     return graph.compile(checkpointer=checkpointer)
