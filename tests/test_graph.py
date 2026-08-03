@@ -47,7 +47,7 @@ def target(tmp_path):
     repo = tmp_path / "target"
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "tokenizer.py").write_text(
-        'def tokenize(text):\n'
+        "def tokenize(text):\n"
         '    """Split raw SQL into a list of tokens."""\n'
         "    return text.split()\n"
     )

@@ -89,9 +89,10 @@ class SentenceTransformerEmbedder:
             # driver on this machine. Batch size is tuned for that, not for GPU.
             self._model = SentenceTransformer(self._model_name, device="cpu")
             # Renamed in sentence-transformers 5.x; both spellings are in the wild.
-            getter = getattr(
-                self._model, "get_embedding_dimension", None
-            ) or self._model.get_sentence_embedding_dimension
+            getter = (
+                getattr(self._model, "get_embedding_dimension", None)
+                or self._model.get_sentence_embedding_dimension
+            )
             self._dim = getter()
         return self._model
 
