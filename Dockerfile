@@ -1,4 +1,7 @@
-# syntax=docker/dockerfile:1
+# No `# syntax=` pragma on purpose: it makes every build resolve and pull the
+# dockerfile frontend from Docker Hub before it reads line 2, which is a network
+# dependency the clean-machine test does not need. BuildKit's built-in frontend
+# already understands multi-stage builds and --mount=type=cache.
 
 # --- stage 1: the React SPA ------------------------------------------------
 # `web/` is a separate build (descope §2 / O1), but C9 asks for *one* command on a
