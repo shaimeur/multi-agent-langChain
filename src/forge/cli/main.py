@@ -61,6 +61,56 @@ def config() -> None:
 
 
 @app.command()
+def tools(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show each tool's arguments."),
+) -> None:
+    """List the externally-callable tools (cahier §9, acceptance gate C6).
+
+    Sandbox tools need a worktree to be bound to, so they are listed here against a
+    throwaway one — binding them to a session is exactly what stops a model choosing
+    the directory the sandbox runs in.
+    """
+    from forge.core.workspace import create_workspace, remove_workspace
+    from forge.tools.registry import build_toolset, describe_toolset
+
+    settings = get_settings()
+    workspace = None
+    try:
+        workspace = create_workspace(f"tools-{uuid.uuid4().hex[:8]}", settings=settings)
+    except Exception:  # noqa: BLE001 — no target repo yet is not a reason to fail
+        console.print("[yellow]No worktree available; sandbox tools omitted.[/]")
+
+    try:
+        rows = describe_toolset(build_toolset(settings=settings, workspace=workspace))
+    finally:
+        if workspace is not None:
+            remove_workspace(workspace)
+
+    table = Table(title=f"FORGE tools — {len(rows)} operational", header_style="bold")
+    table.add_column("Tool", style="cyan", no_wrap=True)
+    if verbose:
+        table.add_column("Arguments", style="dim")
+    table.add_column("What it does")
+    for row in rows:
+        cells = (
+            [row["name"], row["args"], row["description"]]
+            if verbose
+            else [
+                row["name"],
+                row["description"],
+            ]
+        )
+        table.add_row(*cells)
+    console.print(table)
+
+    if len(rows) < 10:
+        console.print(
+            f"\n[yellow]{len(rows)} tools — C6 asks for 10.[/] "
+            "The three sandbox tools need a target repo to build a worktree from."
+        )
+
+
+@app.command()
 def index(
     path: Path = typer.Argument(..., help="Repository to ingest."),
     full: bool = typer.Option(False, "--full", help="Rebuild instead of reindexing the git diff."),
