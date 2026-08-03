@@ -39,6 +39,14 @@ def make_retriever_node(
     token_budget: int = DEFAULT_TOKEN_BUDGET,
 ) -> Callable[[ForgeState], dict]:
     """Build the retriever node over shared, already-loaded resources."""
+
+    def _field(value, name):
+        """A resumed checkpoint hands the plan back as a dict; read either shape."""
+        if value is None:
+            return ""
+        got = value.get(name) if isinstance(value, dict) else getattr(value, name, None)
+        return got or ""
+
     encoder = encoder or load_encoder(settings, collection)
     repo = repo if repo is not None else settings.target_repo
     groups: dict | None = None  # parent-document groups, loaded once on first use
@@ -46,8 +54,17 @@ def make_retriever_node(
     def retriever_node(state: ForgeState) -> dict:
         nonlocal groups
         question = latest_user_text(state)
+        # §5.1 — the planner sends the turn back here when the pack was insufficient,
+        # and ``missing`` says what it could not find. Searching the original question
+        # again returns the identical pack, so the re-entry is dead by construction:
+        # the planner sees what it already rejected and gives up. Appending rather than
+        # replacing keeps the bug report's own vocabulary in the query — ``missing``
+        # names a symbol, the report names the symptom, and the fix site can match either.
+        plan = state.get("plan")
+        missing = _field(plan, "missing") if _field(plan, "needs_more_context") else ""
+        query = f"{question}\n{missing}".strip() if missing else question
         hits = hybrid_search(
-            question,
+            query,
             filters=Filters(prefer_implementation=settings.prefer_implementation),
             settings=settings,
             client=client,
@@ -58,7 +75,7 @@ def make_retriever_node(
         )
         if groups is None:
             groups = load_groups(client, collection)
-        pack = pack_context(hits, groups=groups, token_budget=token_budget, queries=[question])
+        pack = pack_context(hits, groups=groups, token_budget=token_budget, queries=[query])
 
         # §8.2 — this is where third-party text enters the prompt, so this is where
         # the indirect-injection scan belongs. Every chunk is scanned and neutralised

@@ -27,6 +27,13 @@ export interface SessionHistory {
   halted: string
 }
 
+export interface GroundedAnswer {
+  question: string
+  answer: string
+  grounded: boolean
+  citations: CitationView[]
+}
+
 export interface GuardrailEventView {
   session_id: string
   stage: string
@@ -127,6 +134,17 @@ export const deleteSession = (id: string) =>
 
 export const getHistory = (id: string) =>
   fetch(`${BASE}/v1/sessions/${id}/history`).then(json<SessionHistory>)
+
+// The grounded Q&A route (cahier §11). Deliberately separate from the session stream:
+// that stream runs the *change* graph, whose supervisor has no route to an answer, so a
+// question sent down it gets planned instead of answered. `session_id` is passed so the
+// §8.5 log still attributes this turn's guardrail events to the session.
+export const ask = (question: string, sessionId: string, k = 8) =>
+  fetch(`${BASE}/v1/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, session_id: sessionId, k }),
+  }).then(json<GroundedAnswer>)
 
 // The §8.5 guardrail log, newest first — scoped to one session so the panel shows
 // "this run's events", not every event the process has ever logged.

@@ -49,6 +49,10 @@ export default function App() {
   const [events, setEvents] = useState<GuardrailEventView[]>([])
   const [metrics, setMetrics] = useState<SessionMetrics | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // Which path the next message takes. The session stream runs the change graph and the
+  // supervisor has no CHANGE route, so the two cannot be inferred from one entry point —
+  // see STATE.md "ask-vs-change routing" for the deviation this records.
+  const [mode, setMode] = useState<'ask' | 'change'>('ask')
 
   const tlId = useRef(0)
   const streamRef = useRef('')
@@ -148,6 +152,21 @@ export default function App() {
     setMessages((m) => [...m, { role: 'user', content: text }])
     resetRun()
     setRunning(true)
+    if (mode === 'ask') {
+      // Grounded Q&A is a plain request/response — no gates to pause at and no graph
+      // to narrate, so there is nothing for SSE to stream.
+      try {
+        const a = await api.ask(text, activeId)
+        setMessages((m) => [...m, { role: 'assistant', content: a.answer }])
+        setCitations(a.citations ?? [])
+        setGrounded(a.grounded)
+      } catch (e) {
+        setError(String(e))
+      }
+      setRunning(false)
+      void refreshSideData(activeId)
+      return
+    }
     await api.sendMessage(activeId, text, handlers(activeId))
   }
 
@@ -257,6 +276,27 @@ export default function App() {
           </div>
 
           <div className="border-t border-slate-800 p-3">
+            <div className="mb-2 flex items-center gap-1">
+              {(['ask', 'change'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  disabled={running}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
+                    mode === m
+                      ? 'bg-cyan-600/20 text-cyan-300 ring-1 ring-cyan-700'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {m === 'ask' ? 'Ask' : 'Change'}
+                </button>
+              ))}
+              <span className="ml-2 text-[10px] text-slate-600">
+                {mode === 'ask'
+                  ? 'grounded answer with citations'
+                  : 'plan → tests → patch, with both approval gates'}
+              </span>
+            </div>
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
@@ -267,7 +307,13 @@ export default function App() {
                     void send()
                   }
                 }}
-                placeholder={activeId ? 'Ask, or describe a change…' : 'Select a session first'}
+                placeholder={
+                  activeId
+                    ? mode === 'ask'
+                      ? 'Ask about the codebase…'
+                      : 'Describe the change or paste a bug report…'
+                    : 'Select a session first'
+                }
                 disabled={!activeId || running}
                 rows={2}
                 className="min-h-0 flex-1 resize-none rounded-md border border-slate-700 bg-[#0d1117] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-700 focus:outline-none disabled:opacity-50"

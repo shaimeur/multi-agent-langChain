@@ -10,6 +10,7 @@ from __future__ import annotations
 import subprocess
 
 import pytest
+from langchain_core.messages import HumanMessage
 
 from forge.config import CacheMode, Settings
 from forge.models import Chunk, ChunkKind, Retriever, SearchHit
@@ -335,3 +336,43 @@ def test_prefer_implementation_ranks_code_above_its_tests(polluted, settings, cl
     test_ranks = [i for i, h in enumerate(preferred) if is_test_path(h.chunk.path)]
     assert impl_ranks and test_ranks
     assert max(impl_ranks) < min(test_ranks)
+
+
+def test_a_needs_more_context_retry_searches_for_what_the_planner_said_was_missing(
+    monkeypatch, tmp_path
+):
+    """§5.1's re-entry is dead unless the second search differs from the first.
+
+    The planner sends the turn back with ``missing`` describing what it could not
+    find. Re-running the user's original question returns the identical pack, so the
+    planner sees exactly what it already rejected and gives up — the loop costs a
+    model call and can never change its own outcome.
+    """
+    from forge.config import get_settings
+    from forge.core.agents import retriever as retriever_module
+    from forge.models import ChangePlan, ContextPack
+
+    seen: list[str] = []
+    monkeypatch.setattr(retriever_module, "hybrid_search", lambda q, *a, **k: seen.append(q) or [])
+    monkeypatch.setattr(retriever_module, "load_groups", lambda *a, **k: {})
+    monkeypatch.setattr(retriever_module, "pack_context", lambda *a, **k: ContextPack())
+    monkeypatch.setattr(retriever_module, "load_encoder", lambda *a, **k: None)
+
+    node = retriever_module.make_retriever_node(
+        settings=get_settings(), client=None, embedder=None, repo=tmp_path
+    )
+    state = {"messages": [HumanMessage(content="quotes come back wrong")], "session_id": "s"}
+
+    node(state)
+    node(
+        {
+            **state,
+            "plan": ChangePlan(
+                needs_more_context=True, missing="remove_quotes in sqlparse/utils.py"
+            ),
+        }
+    )
+
+    assert seen[0] == "quotes come back wrong", "the first look is the user's own words"
+    assert "remove_quotes in sqlparse/utils.py" in seen[1], "the retry looks for what was missing"
+    assert "quotes come back wrong" in seen[1], "and keeps the report's own vocabulary"

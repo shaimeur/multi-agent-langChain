@@ -387,6 +387,11 @@ def start_index(request: IndexRequest, background: BackgroundTasks) -> IndexAcce
     """
     settings = get_settings()
     target = request.path or str(settings.target_repo)
+    # Share the cached client/embedder. An *embedded* Qdrant allows one client per path
+    # per process, and this process already holds one for /v1/search — letting
+    # ``index_repo`` open its own raised "Storage folder is already accessed by another
+    # instance" and killed the task. Unreachable until the UI could call this route.
+    resources = get_resources()
 
     def run_index() -> None:
         from pathlib import Path
@@ -395,7 +400,13 @@ def start_index(request: IndexRequest, background: BackgroundTasks) -> IndexAcce
 
         # `full` is the inverse of `incremental`: the default reindexes only what the
         # git diff touched, which is the §14/J2 2 s reindex the CLI already relies on.
-        index_repo(Path(target), settings=settings, full=not request.incremental)
+        index_repo(
+            Path(target),
+            settings=settings,
+            client=resources["client"],
+            embedder=resources["embedder"],
+            full=not request.incremental,
+        )
 
     background.add_task(run_index)
     return IndexAccepted(status="accepted", path=target, incremental=request.incremental)

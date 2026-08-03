@@ -32,6 +32,15 @@ from forge.llm.output import content_to_text
 _MAX_CITATIONS = 20
 """Citations are four small fields each; twenty keeps a frame small but shows the tail."""
 
+_STRUCTURED_NODES = frozenset({"supervisor", "planner", "editor", "reviewer", "regression"})
+"""Nodes whose model output is a schema, not prose.
+
+``stream_mode="messages"`` cannot tell the two apart — it forwards whatever the model
+emits — so a ``with_structured_output`` node streams its raw JSON as tokens and the UI
+renders a ``ChangePlan`` as the assistant's reply. These nodes speak through the
+timeline and the approval modals; only prose belongs in a chat bubble.
+"""
+
 
 class StreamEvent(BaseModel):
     """One SSE frame. ``data`` is always a JSON object, never a bare string."""
@@ -113,7 +122,11 @@ async def graph_events(graph, payload, config) -> AsyncIterator[StreamEvent]:
                         continue
                     yield StreamEvent(type="node", data=_summarise(node, delta))
             elif mode == "messages":
-                message, _meta = chunk if isinstance(chunk, tuple) else (chunk, {})
+                message, meta = chunk if isinstance(chunk, tuple) else (chunk, {})
+                # An unknown node still streams: the filter is for nodes known to emit
+                # a schema, not an allowlist that silences anything unrecognised.
+                if (meta or {}).get("langgraph_node") in _STRUCTURED_NODES:
+                    continue
                 # Gemini 3.x hands back a list of content blocks, not a str. Forwarding
                 # it raw makes every client stringify an array — the UI rendered
                 # "[object Object]". Flatten here: this module owns normalisation.
