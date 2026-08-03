@@ -29,6 +29,9 @@ from pydantic import BaseModel, Field
 
 from forge.llm.output import content_to_text
 
+_MAX_CITATIONS = 20
+"""Citations are four small fields each; twenty keeps a frame small but shows the tail."""
+
 
 class StreamEvent(BaseModel):
     """One SSE frame. ``data`` is always a JSON object, never a bare string."""
@@ -64,6 +67,20 @@ def _summarise(node: str, delta: dict) -> dict[str, Any]:
     plan = delta.get("plan")
     if plan is not None:
         summary["plan_steps"] = len(_field(plan, "steps") or [])
+    answer = delta.get("answer")
+    if answer is not None:
+        # The one exception to "counts, not payloads": a citation *is* the thing the
+        # user reads (§15.6 — "citations ancrées affichées"), and re-deriving it
+        # client-side would mean a second grounded call and a second model spend.
+        summary["grounded"] = bool(_field(answer, "grounded"))
+        summary["citations"] = [
+            {
+                "path": _field(c, "path"),
+                "start_line": _field(c, "start_line"),
+                "end_line": _field(c, "end_line"),
+            }
+            for c in (_field(answer, "citations") or [])[:_MAX_CITATIONS]
+        ]
     if "patch_ok" in delta:
         summary["patch_ok"] = delta["patch_ok"]
     report = delta.get("report")

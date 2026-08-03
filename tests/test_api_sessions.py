@@ -26,6 +26,7 @@ from forge.api import main as api_main
 from forge.api.sessions import reset_store
 from forge.api.streaming import graph_events
 from forge.core.state import ForgeState
+from forge.models import Citation, GroundedAnswer
 
 
 @pytest.fixture
@@ -174,6 +175,47 @@ def test_a_node_frame_summarises_rather_than_dumping_state(client):
 
     assert node["data"]["node"] == "worker"
     assert node["data"]["patch_ok"] is True
+
+
+def _answering_graph(session, settings, checkpointer):
+    """One node that returns a grounded answer, exactly as the ``answer`` node does."""
+
+    def answer(state: ForgeState) -> dict:
+        return {
+            "answer": GroundedAnswer(
+                question="where is the lexer?",
+                answer="In sqlparse/lexer.py.",
+                grounded=True,
+                citations=[
+                    Citation(chunk_id="c1", path="sqlparse/lexer.py", start_line=68, end_line=80)
+                ],
+            )
+        }
+
+    graph = StateGraph(ForgeState)
+    graph.add_node("answer", answer)
+    graph.add_edge(START, "answer")
+    graph.add_edge("answer", END)
+    return graph.compile(checkpointer=checkpointer)
+
+
+def test_a_node_frame_carries_the_citations_the_browser_renders(client):
+    """§15.6 shows anchored citations in the UI, so they have to survive summarisation.
+
+    The exception to "counts, not payloads" is deliberate: a citation is what the user
+    reads, and re-deriving it client-side would mean a second grounded call — a second
+    model spend for something the run already computed and verified.
+    """
+    api_main.set_graph_factory(_answering_graph)
+    session_id = client.post("/v1/sessions", json={}).json()["session_id"]
+
+    frames = _frames(client.post(f"/v1/sessions/{session_id}/messages", json={"message": "where?"}))
+    node = next(f for f in frames if f["event"] == "node")
+
+    assert node["data"]["grounded"] is True
+    assert node["data"]["citations"] == [
+        {"path": "sqlparse/lexer.py", "start_line": 68, "end_line": 80}
+    ]
 
 
 class _OneMessageGraph:

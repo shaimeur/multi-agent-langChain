@@ -1,5 +1,13 @@
 // Presentational components for the FORGE UI. All state lives in App; these render.
-import type { ApprovalPayload, PlanPayload, SessionInfo } from './api'
+import { useEffect, useRef, useState } from 'react'
+import type {
+  ApprovalPayload,
+  CitationView,
+  GuardrailEventView,
+  PlanPayload,
+  SessionInfo,
+  SessionMetrics,
+} from './api'
 
 // One label + colour per graph node, so the timeline reads as agents, not function names.
 const NODE_META: Record<string, { label: string; color: string }> = {
@@ -31,6 +39,7 @@ export function Sidebar(props: {
   onSelect: (id: string) => void
   onNew: () => void
   onDelete: (id: string) => void
+  onIndex: () => void
 }) {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-slate-800 bg-[#0d1117]">
@@ -43,6 +52,16 @@ export function Sidebar(props: {
         className="mx-3 mb-3 rounded-md border border-cyan-800 bg-cyan-950/40 px-3 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-900/40 disabled:opacity-50"
       >
         + New session
+      </button>
+      {/* §15.6 opens on `forge index`. The demo runs pre-warmed, but the DoD is "no
+          terminal", so the browser has to be able to kick one off. 202 — fire and forget. */}
+      <button
+        onClick={props.onIndex}
+        disabled={props.busy}
+        title="Re-index the target repo (runs in the background)"
+        className="mx-3 mb-3 rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800/60 disabled:opacity-50"
+      >
+        ⟳ Index repo
       </button>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {props.sessions.length === 0 && (
@@ -211,6 +230,207 @@ function PlanBody({ payload }: { payload: PlanPayload }) {
   )
 }
 
+// --- Citations panel (cahier §15.6: "citations ancrées affichées") ---------
+
+export function CitationsPanel(props: { citations: CitationView[]; grounded: boolean | null }) {
+  const { citations, grounded } = props
+  if (grounded === null && citations.length === 0) {
+    return (
+      <p className="text-xs text-slate-500">
+        Ask a question about the codebase — the spans the answer is grounded in show here.
+      </p>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      {/* `grounded` is the server's verified flag, not a guess: sentinel_out checks every
+          citation against the retrieved pack, so false means "unsupported", not "none found". */}
+      <div
+        className={`rounded-md border p-2 text-xs ${
+          grounded
+            ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300'
+            : 'border-amber-800/60 bg-amber-950/30 text-amber-300'
+        }`}
+      >
+        {grounded ? '● grounded' : '○ ungrounded'} — {citations.length} verified citation
+        {citations.length === 1 ? '' : 's'}
+      </div>
+      <ul className="space-y-1.5">
+        {citations.map((c, i) => (
+          <li
+            key={`${c.path}:${c.start_line}:${i}`}
+            className="rounded-md border border-slate-800 bg-slate-900/40 px-2 py-1.5"
+          >
+            <code className="break-all text-[11px] text-cyan-300">
+              {c.path}:{c.start_line}
+              {c.end_line !== c.start_line && `-${c.end_line}`}
+            </code>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// --- Guardrail panel (cahier §8.5 — the queryable event log) ---------------
+
+const ACTION_STYLE: Record<string, string> = {
+  blocked: 'border-red-800/60 bg-red-950/30 text-red-300',
+  redacted: 'border-amber-800/60 bg-amber-950/30 text-amber-300',
+  flagged: 'border-yellow-800/60 bg-yellow-950/30 text-yellow-300',
+  allowed: 'border-slate-800 bg-slate-900/40 text-slate-500',
+}
+
+const isFiring = (e: GuardrailEventView) => e.action !== 'allowed'
+
+export function GuardrailsPanel({ events }: { events: GuardrailEventView[] }) {
+  if (events.length === 0) {
+    return (
+      <p className="text-xs text-slate-500">
+        No guardrail events for this session yet. Every decision is logged here — allowed
+        included, so a clean run still proves the checks ran.
+      </p>
+    )
+  }
+  return (
+    <ul className="space-y-2">
+      {events.map((e, i) => (
+        <li
+          key={`${e.created_at}-${e.rule}-${i}`}
+          className={`rounded-md border p-2 text-xs ${ACTION_STYLE[e.action] ?? ACTION_STYLE.allowed}`}
+        >
+          <div className="flex items-baseline gap-2">
+            <span className="font-semibold uppercase tracking-wide">{e.action}</span>
+            <code className="text-[11px] opacity-80">{e.rule}</code>
+            <span className="ml-auto shrink-0 text-[10px] opacity-60">{e.stage}</span>
+          </div>
+          {e.detail && <p className="mt-1 opacity-80">{e.detail}</p>}
+          {e.target && <p className="mt-0.5 truncate text-[10px] opacity-60">{e.target}</p>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// --- Cost panel (cahier §15.6 — "le détail des coûts") --------------------
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-800 bg-slate-900/40 px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="font-mono text-sm text-slate-200">{value}</div>
+    </div>
+  )
+}
+
+export function CostPanel({ metrics }: { metrics: SessionMetrics | null }) {
+  if (!metrics) {
+    return <p className="text-xs text-slate-500">Per-session counters show here after a turn.</p>
+  }
+  const mean = metrics.turns ? metrics.latency_ms_total / metrics.turns : 0
+  const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <Stat label="turns" value={String(metrics.turns)} />
+        <Stat label="llm calls" value={String(metrics.llm_calls)} />
+        <Stat label="tokens" value={metrics.tokens.toLocaleString()} />
+        <Stat label="guardrail events" value={String(metrics.guardrail_events)} />
+        <Stat label="latency (last)" value={secs(metrics.latency_ms_last)} />
+        <Stat label="latency (mean)" value={secs(mean)} />
+      </div>
+      {metrics.errors > 0 && (
+        <div className="rounded-md border border-red-800/60 bg-red-950/30 p-2 text-xs text-red-300">
+          {metrics.errors} error{metrics.errors === 1 ? '' : 's'} this session
+        </div>
+      )}
+      {/* Tokens and calls, not currency: nothing in the backend prices a provider, and a
+          made-up dollar figure on the results slide would be worse than none. */}
+      <p className="text-[10px] leading-relaxed text-slate-600">
+        Spend is reported in tokens and calls — FORGE does not price providers.
+      </p>
+    </div>
+  )
+}
+
+// --- Tabbed side panel -----------------------------------------------------
+
+type TabKey = 'results' | 'citations' | 'guardrails' | 'cost'
+
+export function SidePanel(props: {
+  tests: string | null
+  verdict: string | null
+  diff: string | null
+  halted: string | null
+  citations: CitationView[]
+  grounded: boolean | null
+  events: GuardrailEventView[]
+  metrics: SessionMetrics | null
+}) {
+  const [tab, setTab] = useState<TabKey>('results')
+  const firing = props.events.filter(isFiring).length
+  const seen = useRef(firing)
+
+  // A guardrail that fires while you are looking at the diff is not "visibly triggered"
+  // (§15.6 wants the trigger *seen*), so a new non-allowed event pulls the panel to it.
+  // Only non-allowed ones — routine `allowed` traffic must never steal the view.
+  useEffect(() => {
+    if (firing > seen.current) setTab('guardrails')
+    seen.current = firing
+  }, [firing])
+
+  const tabs: { key: TabKey; label: string; badge?: number; alert?: boolean }[] = [
+    { key: 'results', label: 'Results' },
+    { key: 'citations', label: 'Citations', badge: props.citations.length },
+    { key: 'guardrails', label: 'Guardrails', badge: props.events.length, alert: firing > 0 },
+    { key: 'cost', label: 'Cost' },
+  ]
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 border-b border-slate-800">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex flex-1 items-center justify-center gap-1 px-2 py-2.5 text-xs font-medium ${
+              tab === t.key
+                ? 'border-b-2 border-cyan-500 text-cyan-300'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            {t.label}
+            {t.badge ? (
+              <span
+                className={`rounded-full px-1.5 text-[10px] ${
+                  t.alert ? 'bg-red-900/70 text-red-200' : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                {t.badge}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        {tab === 'results' && (
+          <ResultsPanel
+            tests={props.tests}
+            verdict={props.verdict}
+            diff={props.diff}
+            halted={props.halted}
+          />
+        )}
+        {tab === 'citations' && (
+          <CitationsPanel citations={props.citations} grounded={props.grounded} />
+        )}
+        {tab === 'guardrails' && <GuardrailsPanel events={props.events} />}
+        {tab === 'cost' && <CostPanel metrics={props.metrics} />}
+      </div>
+    </div>
+  )
+}
+
 // --- Results panel (tests, verdict, produced diff) -------------------------
 
 export function ResultsPanel(props: {
@@ -222,48 +442,44 @@ export function ResultsPanel(props: {
   const { tests, verdict, diff, halted } = props
   const green = tests ? /passed/.test(tests) && !/failed|error/i.test(tests) : false
   const nothing = !tests && !verdict && !diff && !halted
+  // No header or scroller of its own — SidePanel owns both, and nesting them scrolled twice.
   return (
-    <div className="flex h-full flex-col">
-      <h2 className="border-b border-slate-800 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-        Results
-      </h2>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
-        {nothing && <p className="text-xs text-slate-500">Tests, review, and the diff show here.</p>}
-        {halted && (
-          <div className="rounded-md border border-yellow-800/60 bg-yellow-950/30 p-2 text-xs text-yellow-300">
-            Stopped: {halted}
+    <div className="space-y-4">
+      {nothing && <p className="text-xs text-slate-500">Tests, review, and the diff show here.</p>}
+      {halted && (
+        <div className="rounded-md border border-yellow-800/60 bg-yellow-950/30 p-2 text-xs text-yellow-300">
+          Stopped: {halted}
+        </div>
+      )}
+      {tests && (
+        <div>
+          <div className="mb-1 text-xs text-slate-500">Sandbox tests</div>
+          <div
+            className={`rounded-md border p-2 text-xs ${
+              green
+                ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300'
+                : 'border-red-800/60 bg-red-950/30 text-red-300'
+            }`}
+          >
+            {green ? '✓ ' : '✗ '}
+            {tests}
           </div>
-        )}
-        {tests && (
-          <div>
-            <div className="mb-1 text-xs text-slate-500">Sandbox tests</div>
-            <div
-              className={`rounded-md border p-2 text-xs ${
-                green
-                  ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300'
-                  : 'border-red-800/60 bg-red-950/30 text-red-300'
-              }`}
-            >
-              {green ? '✓ ' : '✗ '}
-              {tests}
-            </div>
+        </div>
+      )}
+      {verdict && (
+        <div>
+          <div className="mb-1 text-xs text-slate-500">Reviewer</div>
+          <div className="rounded-md border border-fuchsia-800/50 bg-fuchsia-950/20 p-2 text-xs text-fuchsia-200">
+            verdict: {verdict}
           </div>
-        )}
-        {verdict && (
-          <div>
-            <div className="mb-1 text-xs text-slate-500">Reviewer</div>
-            <div className="rounded-md border border-fuchsia-800/50 bg-fuchsia-950/20 p-2 text-xs text-fuchsia-200">
-              verdict: {verdict}
-            </div>
-          </div>
-        )}
-        {diff && (
-          <div>
-            <div className="mb-1 text-xs text-slate-500">Verified diff</div>
-            <DiffViewer diff={diff} />
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+      {diff && (
+        <div>
+          <div className="mb-1 text-xs text-slate-500">Verified diff</div>
+          <DiffViewer diff={diff} />
+        </div>
+      )}
     </div>
   )
 }

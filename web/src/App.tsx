@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from './api'
-import type { InterruptFrame, NodeFrame, SessionInfo, StreamHandlers } from './api'
-import { ApprovalModal, ResultsPanel, Sidebar, Timeline } from './components'
+import type {
+  CitationView,
+  GuardrailEventView,
+  InterruptFrame,
+  NodeFrame,
+  SessionInfo,
+  SessionMetrics,
+  StreamHandlers,
+} from './api'
+import { ApprovalModal, Sidebar, SidePanel, Timeline } from './components'
 import type { TimelineItem } from './components'
 
 interface Msg {
@@ -18,6 +26,7 @@ function nodeDetail(f: NodeFrame): string {
   if (typeof f.chunks === 'number') return `${f.chunks} chunk(s) retrieved`
   if (typeof f.patch_ok === 'boolean') return f.patch_ok ? 'patch applies' : 'patch failed to apply'
   if (typeof f.iteration === 'number') return `iteration ${f.iteration}`
+  if (f.citations) return `${f.citations.length} citation(s), ${f.grounded ? 'grounded' : 'ungrounded'}`
   return ''
 }
 
@@ -35,6 +44,11 @@ export default function App() {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [input, setInput] = useState('')
+  const [citations, setCitations] = useState<CitationView[]>([])
+  const [grounded, setGrounded] = useState<boolean | null>(null)
+  const [events, setEvents] = useState<GuardrailEventView[]>([])
+  const [metrics, setMetrics] = useState<SessionMetrics | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const tlId = useRef(0)
   const streamRef = useRef('')
@@ -56,6 +70,18 @@ export default function App() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages, streaming, timeline])
 
+  // Guardrail events and metrics are session-scoped and cumulative, so they are refetched
+  // rather than reset: the log is the record of the whole session, not of one turn.
+  const refreshSideData = useCallback(async (id: string) => {
+    try {
+      const [ev, m] = await Promise.all([api.getGuardrailEvents(id), api.getMetrics(id)])
+      setEvents(ev)
+      setMetrics(m.per_session[id] ?? m.totals)
+    } catch {
+      /* diagnostics panels — a failed refresh must not take down the run view */
+    }
+  }, [])
+
   const resetRun = () => {
     setTimeline([])
     setTests(null)
@@ -64,6 +90,8 @@ export default function App() {
     setHalted(null)
     setError(null)
     setStreaming('')
+    setCitations([])
+    setGrounded(null)
     streamRef.current = ''
   }
 
@@ -76,12 +104,19 @@ export default function App() {
     setStreaming('')
   }
 
-  const handlers = (): StreamHandlers => ({
+  // `id` is threaded in rather than read off `activeId`: a stream outlives the render that
+  // started it, and the side-panel refresh must hit the session the run belongs to.
+  const handlers = (id: string): StreamHandlers => ({
     onNode: (f) => {
       setTimeline((t) => [...t, { id: tlId.current++, node: f.node, detail: nodeDetail(f) }])
       if (f.tests) setTests(f.tests)
       if (f.verdict) setVerdict(f.verdict)
       if (f.halted) setHalted(f.halted)
+      // An empty array is still a present answer — check the key, not its length.
+      if (f.citations) {
+        setCitations(f.citations)
+        setGrounded(f.grounded ?? false)
+      }
     },
     onToken: (text) => {
       streamRef.current += text
@@ -91,14 +126,18 @@ export default function App() {
       if (f.payload.kind === 'patch_approval') setDiff(f.payload.diff ?? null)
       setInterrupt(f)
       setRunning(false)
+      void refreshSideData(id)
     },
     onDone: () => {
       commitStreaming()
       setRunning(false)
+      void refreshSideData(id)
     },
     onError: (msg) => {
       setError(msg)
       setRunning(false)
+      // A blocked input ends as an error frame — the reason is in the guardrail log.
+      void refreshSideData(id)
     },
   })
 
@@ -109,14 +148,23 @@ export default function App() {
     setMessages((m) => [...m, { role: 'user', content: text }])
     resetRun()
     setRunning(true)
-    await api.sendMessage(activeId, text, handlers())
+    await api.sendMessage(activeId, text, handlers(activeId))
   }
 
   const decide = async (approved: boolean) => {
     if (!activeId || !interrupt) return
     setInterrupt(null)
     setRunning(true)
-    await api.approve(activeId, approved, handlers())
+    await api.approve(activeId, approved, handlers(activeId))
+  }
+
+  const reindex = async () => {
+    try {
+      const r = await api.startIndex()
+      setNotice(`indexing ${r.path} (${r.incremental ? 'incremental' : 'full'})…`)
+    } catch (e) {
+      setError(String(e))
+    }
   }
 
   const newSession = async () => {
@@ -133,6 +181,9 @@ export default function App() {
     setActiveId(id)
     setMessages([])
     resetRun()
+    setEvents([])
+    setMetrics(null)
+    void refreshSideData(id)
     try {
       const h = await api.getHistory(id)
       setMessages(
@@ -155,6 +206,8 @@ export default function App() {
         setActiveId(null)
         setMessages([])
         resetRun()
+        setEvents([])
+        setMetrics(null)
       }
       void refreshSessions()
     }
@@ -169,6 +222,7 @@ export default function App() {
         onSelect={selectSession}
         onNew={newSession}
         onDelete={removeSession}
+        onIndex={() => void reindex()}
       />
 
       <main className="flex min-w-0 flex-1">
@@ -185,6 +239,7 @@ export default function App() {
               )}
             </span>
             {running && <span className="text-xs text-cyan-400">● streaming</span>}
+            {notice && <span className="text-xs text-slate-500">{notice}</span>}
             {error && <span className="ml-auto text-xs text-red-400">{error}</span>}
           </header>
 
@@ -228,13 +283,22 @@ export default function App() {
           </div>
         </section>
 
-        {/* Right column: timeline + results */}
-        <section className="flex w-96 shrink-0 flex-col border-l border-slate-800 bg-[#0d1117]">
+        {/* Right column: timeline above, tabbed detail below */}
+        <section className="flex w-[26rem] shrink-0 flex-col border-l border-slate-800 bg-[#0d1117]">
           <div className="min-h-0 flex-1 border-b border-slate-800">
             <Timeline items={timeline} running={running} />
           </div>
           <div className="min-h-0 flex-1">
-            <ResultsPanel tests={tests} verdict={verdict} diff={diff} halted={halted} />
+            <SidePanel
+              tests={tests}
+              verdict={verdict}
+              diff={diff}
+              halted={halted}
+              citations={citations}
+              grounded={grounded}
+              events={events}
+              metrics={metrics}
+            />
           </div>
         </section>
       </main>

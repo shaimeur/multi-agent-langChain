@@ -27,7 +27,41 @@ export interface SessionHistory {
   halted: string
 }
 
+export interface GuardrailEventView {
+  session_id: string
+  stage: string
+  rule: string
+  action: string
+  score: number
+  detail: string
+  target: string
+  created_at: string
+}
+
+export interface SessionMetrics {
+  turns: number
+  llm_calls: number
+  tokens: number
+  guardrail_events: number
+  latency_ms_total: number
+  latency_ms_last: number
+  errors: number
+}
+
+export interface MetricsResponse {
+  sessions: number
+  totals: SessionMetrics
+  per_session: Record<string, SessionMetrics>
+  guardrail_events: number
+}
+
 // --- SSE frame payloads ----------------------------------------------------
+
+export interface CitationView {
+  path: string
+  start_line: number
+  end_line: number
+}
 
 export interface NodeFrame {
   node: string
@@ -38,6 +72,8 @@ export interface NodeFrame {
   verdict?: string
   halted?: string
   iteration?: number
+  grounded?: boolean
+  citations?: CitationView[]
 }
 
 export interface PlanStepView {
@@ -91,6 +127,25 @@ export const deleteSession = (id: string) =>
 
 export const getHistory = (id: string) =>
   fetch(`${BASE}/v1/sessions/${id}/history`).then(json<SessionHistory>)
+
+// The §8.5 guardrail log, newest first — scoped to one session so the panel shows
+// "this run's events", not every event the process has ever logged.
+export const getGuardrailEvents = (id: string, limit = 50) =>
+  fetch(`${BASE}/v1/guardrails/events?session_id=${encodeURIComponent(id)}&limit=${limit}`).then(
+    json<GuardrailEventView[]>,
+  )
+
+export const getMetrics = (id: string) =>
+  fetch(`${BASE}/v1/metrics?session_id=${encodeURIComponent(id)}`).then(json<MetricsResponse>)
+
+// 202 and indexes in the background — the demo pre-warms, so this is the "no terminal"
+// escape hatch rather than something to wait on.
+export const startIndex = (incremental = true) =>
+  fetch(`${BASE}/v1/index`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ incremental }),
+  }).then(json<{ status: string; path: string; incremental: boolean }>)
 
 // --- SSE -------------------------------------------------------------------
 
