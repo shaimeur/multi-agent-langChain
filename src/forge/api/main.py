@@ -18,8 +18,12 @@ and rebuilding the embedder per request would reload the model weights every tim
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
@@ -533,3 +537,30 @@ def ask(request: AskRequest) -> GroundedAnswer:
     # hand the pack back, so sentinel_out scans for secrets and leaves them alone
     # rather than re-checking against a pack it does not have.
     return check_answer(answer, None, session_id=request.session_id).answer
+
+
+# --- the built SPA (cahier §10.1 / L4) -------------------------------------
+
+
+# `docker compose up` has to produce something a person can open, and §15.6 is a
+# *browser* scenario — an API with no UI cannot satisfy C9 and C7 at once. Serving
+# `web/dist` from this process keeps it to one origin and one port, so the SPA needs
+# no CORS grant and no reverse proxy. Mounted last on purpose: every /v1 route above
+# is already registered, so the catch-all can only claim paths nothing else wanted.
+#
+# Absent in a dev checkout that has never run `npm run build`, and that is fine —
+# `npm run dev` serves the UI on :5173 and proxies /v1 here.
+def _mount_web_ui() -> Path | None:
+    candidates = [
+        Path(os.environ["FORGE_WEB_DIST"]) if os.environ.get("FORGE_WEB_DIST") else None,
+        Path("/app/web/dist"),
+        Path(__file__).resolve().parents[3] / "web" / "dist",
+    ]
+    for dist in candidates:
+        if dist and (dist / "index.html").is_file():
+            app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
+            return dist
+    return None
+
+
+WEB_DIST = _mount_web_ui()

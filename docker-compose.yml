@@ -6,7 +6,9 @@
 # build machine has ~5 GB of RAM to give, and the acceptance test for C9 is that
 # this comes up on a clean machine, which is usually the examiner's laptop.
 #   postgres -> dropped, SQLite checkpointer   (descope §1)
-#   web      -> dropped, UI served from `api`  (descope §2, pending)
+#   web      -> no separate service: the React SPA is built in the Dockerfile's `web`
+#               stage and served by `api` at / (descope §2, resolved D14). One origin,
+#               one port — open http://localhost:8000 and the demo is there.
 #   redis    -> dropped, in-process rate limit (cahier's own cut list, item 1)
 #   indexer  -> folded into `api` as a background task, reachable as `forge index`
 
@@ -43,7 +45,8 @@ services:
   api:
     <<: *common
     ports:
-      - "8000:8000"
+      # Overridable so scripts/clean_machine_test.sh can run beside a dev server.
+      - "${API_PORT:-8000}:8000"
     command:
       ["uvicorn", "forge.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
