@@ -34,7 +34,7 @@ Last commit  : 2870ad8 [D13] Make the needs_more_context retry actually re-retri
   **green** half is also unconfirmed: red→revise→better-patch is proven, the re-verify after the
   repair is not (429 mid-run). Both need ~5 spare requests, not new code.
 - **Carried**: `notebooks/02_agent_traces.ipynb` (C2 — real traces now exist, incl. a full
-  gate→sandbox→repair run) · `forge tools` listing 10 (C6, settle O2) · `forge review` standalone.
+  gate→sandbox→repair run) · `forge tools` listing 10 (C6, O2) · `forge review` standalone.
 
 ## Blocked / open decisions
 - **O6 (new, security) — `/v1/ask` does not run the §8.2 injection scan.** `scan_chunks` is called
