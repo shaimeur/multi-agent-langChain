@@ -304,19 +304,19 @@ three new open items are in STATE.md as **O6** (`/v1/ask` skips the §8.2 inject
 
 ### [ ] D14 · Containerisation, benchmark, documentation
 
-- [ ] Multi-stage Dockerfiles for api and sandbox, healthchecks, compose profiles, final pass
-- [ ] **`scripts/clean_machine_test.sh`** — fresh clone into an empty directory on a machine that has never seen the project: `cp .env.example .env && docker compose up`. Fix everything it reveals; it always reveals something (**C9**)
-- [ ] Run `swe_mini` (4 bugs): resolution rate, mean repair iterations, cost and wall clock per task, regression rate → `docs/evaluation.md`
-- [ ] README rewrite: architecture diagram, quickstart, env var reference, API reference, evaluation results, limitations. Delete the stale status claims
-- [ ] `make requirements` → `requirements.txt` (the cahier asks for it; pyproject stays the source of truth)
-- [ ] `docs/architecture.md` and `docs/limitations.md` finished; fold the approved descope decisions back into the cahier (**O3**)
+- [x] Multi-stage Dockerfile (node stage builds `web/`, api stage serves it), git + ripgrep installed, entrypoint bootstraps the target repo, `API_PORT` overridable
+- [x] **`scripts/clean_machine_test.sh`** written — clones HEAD into an empty dir, `cp .env.example .env`, `docker compose up`, then probes health/openapi/SPA/index/search and restarts the container to prove C4. **It already revealed five defects, all fixed** (no `git` in the image, no `ripgrep`, no target repo in a clone, `.env.example` defaulting to `CACHE_MODE=auto`, no UI served at all). **The run itself is still pending** — this sandbox's Docker daemon has no registry egress, so `node:22-slim` cannot be pulled (**C9 open**)
+- [ ] Run `swe_mini` (4 bugs): resolution rate, mean repair iterations, cost and wall clock per task, regression rate → `docs/evaluation.md` — needs quota
+- [x] README rewritten: one-command quickstart, "use it on your own project", API table, honest "what does not work yet". Stale status claims deleted
+- [x] `make requirements` → `requirements.txt` (383 lines)
+- [x] `docs/architecture.md` written; `docs/limitations.md` already existed. Folding descope back into the cahier is still **O3** (frozen file — human)
 
 **DoD: one command brings the whole system up on a clean machine, and the benchmark numbers are
 recorded.**
 
 ### [ ] D15 · Slides, rehearsal, freeze
 
-- [ ] 12 slides per §15.5. Slide 6 (the ablation table) is the strongest one — build it first
+- [x] 12 slides per §15.5 drafted in `docs/slides.md`, with the four certain jury questions answered in an annexe. Slide 6 carries the real ablation numbers
 - [ ] Pre-warmed demo state: target repo pre-indexed, caches warm, poisoned-comment file staged, `CACHE_MODE=replay` verified end to end with the network physically off
 - [ ] **Record the video of a successful run.** Non-negotiable. Do this before rehearsing, not after
 - [ ] Rehearse the 4-minute script three times end to end, stopwatch in hand
