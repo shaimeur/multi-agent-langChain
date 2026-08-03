@@ -3,11 +3,11 @@
      unless its DoD command actually ran and passed this or a named session.
      GOALS.md is the durable plan; this file is where you are in it. -->
 
-Last updated : 2026-07-28
+Last updated : 2026-08-03
 Roadmap day  : D1–D12 done · **B2 largely resolved** (real model on RAG + repair loop) · D13
-               (React Web UI, O1 resolved) is next
+               (React Web UI) frontend built; **change path now retrieves before it plans**
 Branch       : main
-Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini real run (3/4)
+Last commit  : 3dd3b4a [evals] Keep the two empty-pack planner recordings
 
 ## Done (verified)
 - [x] D1–D5 — foundations · AST ingestion (617 chunks) · hybrid retrieval · RAG eval
@@ -26,17 +26,22 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
 - [x] **Gemini 3.x content fix** (94c9c3d) — `.content` is a block list now; `llm/output.py`
       `content_to_text` flattens it; `with_structured_output` agents were already immune
 - [x] **Worktree bug fix** (f20cf22) — relative `WORKSPACE_ROOT` lost the worktree (see Do not redo)
-- [x] Full suite — `CACHE_MODE=replay uv run pytest` → exit 0 (359 passed, 6 skipped); ruff clean
+- [x] **Retriever wired into the change path** (98f2356, 2026-08-03) — `forge fix` *and* the API
+      built the graph with no retriever: planner opened on an empty pack, dead-ended at END. START
+      now enters at the retriever when one is wired. `build_default_retriever` (`core/graph.py`);
+      the API passes its cached client/embedder/encoder. Pinned by `…retrieves_before_it_plans`.
+- [x] Full suite — `CACHE_MODE=replay uv run pytest` → exit 0 (364 passed, 6 skipped); `make lint`
+      green as of 4aab590 — **O3 closed**
 
 ## In progress
 - **D13 Web UI — frontend built** (125c5db) — `web/` React+Vite+TS+Tailwind: sessions sidebar,
   SSE-streamed chat, agent timeline, plan/patch approval modals, diff + tests panels. `npm run build`
   (`tsc -b && vite build`) → exit 0, oxlint clean. `web/` is a separate build; dev proxies `/v1` → :8000.
   Remaining: citations panel + the in-browser §15.6 run (**C7**) — needs a live API + real model (quota).
-- **Full graph reached the editor on a real model** (2026-07-29) — fixed the planner drowning in the
-  ~40-chunk pack (cap 8, `planner.py`); a real run went planner → both gates (auto-approved) →
-  regression → editor before the daily quota hit. Back half (editor/tester/reviewer) proven by swe_mini.
-  Remaining: one contiguous green run + trace capture (C2/C7) once quota resets. Driver in scratchpad.
+- **Full graph reached the editor on a real model** (2026-07-29) — planner no longer drowns in the
+  ~40-chunk pack (cap 8); a real run went planner → both gates (auto-approved) → regression → editor
+  before the daily quota hit. Back half proven by swe_mini. Remaining: one contiguous green run +
+  trace capture (C2/C7) once quota resets — no scratchpad driver needed now, `forge fix` retrieves.
 - **Carried**: `notebooks/02_agent_traces.ipynb` (C2 — now unblocked, real traces exist) · `forge tools`
   listing 10 (C6, settle O2 wording) · `forge review` standalone.
 
@@ -49,8 +54,7 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
 - **Free-tier daily quota ≈ 20 requests/day PER MODEL** (gemini-3.6-flash, via `flash-latest`, exhausted
   2026-07-29). Real runs are severely rate-limited → record fixtures early and demo in replay.
 - **O5** injection tier 2 (descope entry needed, frozen → human) · **O4** reviewer/editor same family,
-  one provider · **O2** C6 "Tools AND MCP" wording · **O3** `make lint` red pre-D7 (`make fmt` fixes) ·
-  **B3** `qwen2.5-coder:7b` unpulled.
+  one provider · **O2** C6 "Tools AND MCP" wording · **B3** `qwen2.5-coder:7b` unpulled.
 - **Gates: 4 of C1–C10 closed (C1, C3, C5, C8)** at D12 of D15. C2 needs the notebook; the planner /
   full `forge fix` real-model run feeds C2 + C7.
 
@@ -62,8 +66,9 @@ Last commit  : ccfe8b1 [evals] Record repair-loop fixtures — full swe_mini rea
 - **Gemini models**: `gemini-2.5-*` **404 for keys created after Google's mid-2026 cutover**; use the 3.5
   tier / `-latest` aliases. New keys look like `AQ.Ab…`, not `AIza…`. `.content` is a block list (above).
 - **Planner context**: capped to top-8 (`planner.py _MAX_SNIPPETS`) — the full ~40-chunk pack makes a
-  thinking model return an empty `ChangePlan`. **`forge fix` wires no retriever**, so its planner starts
-  on an empty pack and dead-ends at END; wire `retriever_node` into its `build_change_graph` call.
+  thinking model return an empty `ChangePlan`. The retriever is now wired into both change-path
+  callers and START enters there (98f2356); `retriever_node` stays **optional** in
+  `build_change_graph` because the D9 tests inject their own pack — do not make it required.
 - **`build_llm` installs a process-global LangChain cache**; `reset_llm_cache()` + autouse conftest undo
   it. Guardrail log never raises. SSE frames CRLF. Sandbox: `RLIMIT_DATA`, exit-code is authority, image
   is dep-free (pytest/ruff only), `/work` = the bind-mounted worktree. sqlparse @0d24023.
