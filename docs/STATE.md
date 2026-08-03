@@ -4,77 +4,81 @@
      GOALS.md is the durable plan; this file is where you are in it. -->
 
 Last updated : 2026-08-03
-Roadmap day  : D1–D12 done · **B2 largely resolved** (real model on RAG + repair loop) · D13
-               (React Web UI) frontend built; **change path now retrieves before it plans**
+Roadmap day  : D1–D12 done · **D13 driven end-to-end in a real browser for the first time**;
+               8 of §15.6's 9 beats seen on screen, the full agent pipeline among them
 Branch       : main
-Last commit  : 3dd3b4a [evals] Keep the two empty-pack planner recordings
+Last commit  : 2870ad8 [D13] Make the needs_more_context retry actually re-retrieve
 
 ## Done (verified)
-- [x] D1–D5 — foundations · AST ingestion (617 chunks) · hybrid retrieval · RAG eval
-      (**MiniLM FROZEN**, reranker OFF) · LangGraph + memory (restart proven offline)
-- [x] D6 Planner+Editor · D7 Sandbox (15 flags via `docker inspect`) · D8 Tester+repair loop ·
-      D9 Reviewer+HITL (both `interrupt()` gates) · D10 Guardrails · D11 Red team (**C5**, 32/32)
-- [x] **D12 API+CLI — C8 CLOSED**. All §11 routes, SSE (CRLF), `forge fix` with both gates
-- [x] **C1 CLOSED** (02261ef) — `pytest tests/test_agents.py -k distinct` → exit 0; 6 distinct agents
-- [x] **C3 CLOSED** (2026-07-28) — full RAG pipeline: `forge ask` grounded + `file:line` citations
-      (live + replay); `uv run pytest evals/test_citations_resolve.py` → exit 0
-- [x] **B2 real-model proof (2026-07-28)** — Gemini key verified against live quota. A real model
-      (`gemini-flash-latest`) drives EDITOR/TESTER/REVIEWER + RAG, live and offline-replayable:
-      · `forge ask` → **● grounded**, `file:line` citations resolve (`sqlparse/__init__.py:68-80`)
-      · `swe_mini` for real — `--verify` 4/4 sound (docker); repair **3/4** (SM-03 hit budget);
-        both reproduce under `CACHE_MODE=replay` from committed fixtures (ec964c7, ccfe8b1)
-- [x] **Gemini 3.x content fix** (94c9c3d) — `.content` is a block list now; `llm/output.py`
-      `content_to_text` flattens it; `with_structured_output` agents were already immune
-- [x] **Worktree bug fix** (f20cf22) — relative `WORKSPACE_ROOT` lost the worktree (see Do not redo)
-- [x] **Retriever wired into the change path** (98f2356, 2026-08-03) — `forge fix` *and* the API
-      built the graph with no retriever: planner opened on an empty pack, dead-ended at END. START
-      now enters at the retriever when one is wired. `build_default_retriever` (`core/graph.py`);
-      the API passes its cached client/embedder/encoder. Pinned by `…retrieves_before_it_plans`.
-- [x] Full suite — `CACHE_MODE=replay uv run pytest` → exit 0 (364 passed, 6 skipped); `make lint`
-      green as of 4aab590 — **O3 closed**
+- [x] D1–D5 foundations · AST ingestion · hybrid retrieval · RAG eval (**MiniLM FROZEN**, reranker
+      OFF) · LangGraph + memory · D6 Planner+Editor · D7 Sandbox · D8 Tester+repair · D9 Reviewer+HITL
+      · D10 Guardrails · D11 Red team (**C5**, 32/32) · **D12 API+CLI — C8 CLOSED**
+- [x] **C1 CLOSED** (02261ef) · **C3 CLOSED** (2026-07-28) · **B2 real-model proof** (2026-07-28)
+- [x] Gemini 3.x content fix (94c9c3d) · Worktree bug fix (f20cf22) · Retriever in the change path
+      (98f2356)
+- [x] **§15.6 in the browser (2026-08-03)** — live API + `gemini-flash-latest` + docker sandbox,
+      driven through the React UI with no terminal. Seen on screen, in order:
+      · **index** button → 202, re-index confirmed by shifted chunk spans
+      · **grounded citations** — `● grounded — 4 verified citations`, `sqlparse/lexer.py:155-161` …
+      · **bug report → timeline** — all six agents narrated from `node` frames
+      · **plan gate** → approved · **test author RED** (`exit=1 0 passed, 1 failed` in docker)
+      · **editor → patch gate** with coloured diff → approved · **apply** · **sandbox**
+        (`453 passed, 28 failed`) · **reviewer verdict revise** · **repair loop produced a
+        better patch** (`isinstance(sql, str)` → `(str, bytes, TextIOBase)` + `hasattr(sql,'read')`)
+      · **guardrail fired visibly** — `[REDACTED] injection.override … lexer.py:155-165`, the panel
+        auto-switched to it. The model never obeyed the planted instruction.
+- [x] Full suite — `CACHE_MODE=replay uv run pytest` → **366 passed, 6 skipped, exit 0**;
+      `make lint` clean; `npm run build` exit 0, oxlint clean (all at 2870ad8)
 
 ## In progress
-- **D13 Web UI — frontend built** (125c5db) — `web/` React+Vite+TS+Tailwind: sessions sidebar,
-  SSE-streamed chat, agent timeline, plan/patch approval modals, diff + tests panels. `npm run build`
-  (`tsc -b && vite build`) → exit 0, oxlint clean. `web/` is a separate build; dev proxies `/v1` → :8000.
-  Remaining: citations panel + the in-browser §15.6 run (**C7**) — needs a live API + real model (quota).
-- **Full graph reached the editor on a real model** (2026-07-29) — planner no longer drowns in the
-  ~40-chunk pack (cap 8); a real run went planner → both gates (auto-approved) → regression → editor
-  before the daily quota hit. Back half proven by swe_mini. Remaining: one contiguous green run +
-  trace capture (C2/C7) once quota resets — no scratchpad driver needed now, `forge fix` retrieves.
-- **Carried**: `notebooks/02_agent_traces.ipynb` (C2 — now unblocked, real traces exist) · `forge tools`
-  listing 10 (C6, settle O2 wording) · `forge review` standalone.
+- **D13 remaining**: the **Cost panel is built and wired to `/v1/metrics` but was never seen
+  rendering** — the patch modal covered it and then quota died. One click to confirm. Beat 6's
+  **green** half is also unconfirmed: red→revise→better-patch is proven, the re-verify after the
+  repair is not (429 mid-run). Both need ~5 spare requests, not new code.
+- **Carried**: `notebooks/02_agent_traces.ipynb` (C2 — real traces now exist, incl. a full
+  gate→sandbox→repair run) · `forge tools` listing 10 (C6, settle O2) · `forge review` standalone.
 
 ## Blocked / open decisions
-- **Canonical coder/reasoner model** — `gemini-3.5-flash` (config default) is **503-throttled** on the
-  free tier; live runs used `gemini-flash-latest`. Fixture keys are model-dependent, so replay needs
-  `GEMINI_CODER_MODEL=GEMINI_REASONER_MODEL=gemini-flash-latest`, or re-record under the pinned model.
-- **.env**: `QDRANT_URL=http://localhost:6333` breaks offline `forge ask` (no server) — blank it for the
-  embedded index, or `docker compose up qdrant`. (`WORKSPACE_ROOT` relative is now handled in code.)
-- **Free-tier daily quota ≈ 20 requests/day PER MODEL** (gemini-3.6-flash, via `flash-latest`, exhausted
-  2026-07-29). Real runs are severely rate-limited → record fixtures early and demo in replay.
-- **O5** injection tier 2 (descope entry needed, frozen → human) · **O4** reviewer/editor same family,
-  one provider · **O2** C6 "Tools AND MCP" wording · **B3** `qwen2.5-coder:7b` unpulled.
-- **Gates: 4 of C1–C10 closed (C1, C3, C5, C8)** at D12 of D15. C2 needs the notebook; the planner /
-  full `forge fix` real-model run feeds C2 + C7.
+- **O6 (new, security) — `/v1/ask` does not run the §8.2 injection scan.** `scan_chunks` is called
+  in exactly one place, `core/agents/retriever.py:84`. The ask path (`rag/answer.py:answer_question`)
+  has both sentinels but no scan of *retrieved* chunks, so the poisoned comment produced zero
+  `injection.*` events there — it was only caught on the change path. The UI's Ask button routes
+  every question down that path. **Not fixed unilaterally: guardrail wiring is the human's call.**
+- **O7 (new) — retrieval cannot bridge a call hop.** SM-01's report describes `get_real_name`
+  returning a trailing quote; the defect is two hops down in `utils.remove_quotes`, which is **not in
+  the top 35 chunks**. It ranks 2nd once the report *names* it. The planner then asked for the wrong
+  file (`missing` said "Identifier / get_real_name in sqlparse/sql.py"), so even a working retry
+  cannot rescue it. Text similarity only — no call-graph expansion. Honest §12 limitation.
+- **O8 (new) — ask-vs-change is decided by the UI**, not the SUPERVISOR: `Route` is
+  `{RETRIEVE, ANSWER, END}` with no CHANGE member, and the session stream only ever builds the change
+  graph, so a question sent down it gets *planned*. Human chose the UI toggle (2026-08-03) over
+  unifying the graph, on cost grounds. Cahier §4 says the supervisor routes — expect the question.
+- **Free-tier quota ≈ 20 req/day PER MODEL** — exhausted 2026-08-03 mid-repair (`429`, surfaced
+  cleanly as a typed error frame, no crash). Both `gemini-flash-latest` and `gemini-3.5-flash`
+  answered today, so the 503 note on 3.5-flash is stale.
+- **O5** injection tier 2 (frozen → human) · **O4** reviewer/editor same family · **O2** C6 wording ·
+  **B3** `qwen2.5-coder:7b` unpulled.
+- **Gates: 4 of C1–C10 closed** (C1, C3, C5, C8). C7 is one Cost click + one green re-verify away.
 
 ## Do not redo
-- **Worktree path**: `create_workspace` now `.resolve()`s `workspace_root`. A *relative* WORKSPACE_ROOT
-  made `git worktree add` (cwd=repo) build the tree under `data/target/…` while `Workspace.path` resolved
-  against the process cwd — the sandbox then mounted an empty dir (import errors, seed misses). This, not
-  drift, is why swe_mini read "unsound". Real swe_mini runs need `SANDBOX_BACKEND=docker`.
-- **Gemini models**: `gemini-2.5-*` **404 for keys created after Google's mid-2026 cutover**; use the 3.5
-  tier / `-latest` aliases. New keys look like `AQ.Ab…`, not `AIza…`. `.content` is a block list (above).
-- **Planner context**: capped to top-8 (`planner.py _MAX_SNIPPETS`) — the full ~40-chunk pack makes a
-  thinking model return an empty `ChangePlan`. The retriever is now wired into both change-path
-  callers and START enters there (98f2356); `retriever_node` stays **optional** in
-  `build_change_graph` because the D9 tests inject their own pack — do not make it required.
-- **`build_llm` installs a process-global LangChain cache**; `reset_llm_cache()` + autouse conftest undo
-  it. Guardrail log never raises. SSE frames CRLF. Sandbox: `RLIMIT_DATA`, exit-code is authority, image
-  is dep-free (pytest/ruff only), `/work` = the bind-mounted worktree. sqlparse @0d24023.
+- **Worktree path**: `create_workspace` `.resolve()`s `workspace_root` (see f20cf22).
+- **Gemini**: `gemini-2.5-*` 404s for post-cutover keys; `.content` is a block list.
+- **Planner context** capped to top-8 (`planner.py _MAX_SNIPPETS`); `retriever_node` stays optional
+  in `build_change_graph` — D9 tests inject their own pack.
+- **Three bugs the browser found that no test could** (2870ad8, 04726cc): `/v1/index` opened a
+  *second* embedded Qdrant client for a path this process already holds; `stream_mode="messages"`
+  streamed a `with_structured_output` node's raw JSON into the chat as the assistant's reply; and the
+  §5.1 re-entry re-ran `latest_user_text`, so the retry returned the identical pack. All three were
+  unreachable until the UI actually called those paths.
+- **Demo seeding**: `data/target` is pinned at `0d24023`; worktrees branch from **HEAD**, so a seeded
+  bug must be *committed* there to reach a session. Restore with `git reset --hard 0d24023`, delete
+  the `forge/*` worktrees you made, then **re-index** — the index keeps the poisoned chunk otherwise.
+- `build_llm` installs a process-global cache; guardrail log never raises; SSE frames CRLF; sandbox
+  exit-code is authority; embedded Qdrant: ONE client per path per process. sqlparse @0d24023.
 
 ## Notes for the next session
-- Real runs: `CACHE_MODE=auto SANDBOX_BACKEND=docker GEMINI_CODER_MODEL=gemini-flash-latest
-  GEMINI_REASONER_MODEL=gemini-flash-latest`. Commits OMIT the Claude trailer (author Shaimeur).
-- `sandbox/` + `guardrails/` security-sensitive: flag any flag/cap/allowlist change. `make sandbox-image`
-  builds `forge-sandbox:latest`. Embedded Qdrant: ONE client per path per process.
+- Real runs: `QDRANT_URL= CACHE_MODE=auto SANDBOX_BACKEND=docker
+  GEMINI_CODER_MODEL=GEMINI_REASONER_MODEL=gemini-flash-latest`. Blank `QDRANT_URL` or the embedded
+  index is bypassed. Commits OMIT the Claude trailer (author Shaimeur).
+- Web: `cd web && npm run dev` proxies `/v1` → :8000. API: `make api`.
+- 8 new fixtures recorded today (no key material — LangChain serialises secrets by reference).

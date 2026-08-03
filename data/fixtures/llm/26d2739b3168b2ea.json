@@ -1,0 +1,73 @@
+{
+  "namespace": "llm",
+  "key": "26d2739b3168b2ea",
+  "recorded_at": "2026-08-03T12:05:57+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: Validate that the sql argument in tokenize is a string (isinstance(sql, str)), raising a TypeError if it is not.\\nTarget file: sqlparse/lexer.py\\nDeclared blast radius: ['sqlparse/lexer.py']\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/lexer.py\\n<<< old\\n    if not isinstance(sql, str):\\n        raise TypeError('Expected string, got {!r}'.format(type(sql)))\\n>>> new\\n    if not isinstance(sql, (str, bytes, TextIOBase)) and not hasattr(sql, 'read'):\\n        raise TypeError('Expected string or file-like object, got {!r}'.format(type(sql)))\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"plan_conformance\": false, \"plan_conformance_why\": \"The patch relaxes the type check on the sql argument to allow bytes, TextIOBase, and file-like objects with a read method, rather than strictly validating that sql is an instance of str as specified in the plan step.\", \"regression_risk_ok\": true, \"regression_risk_why\": \"All files in the declared blast radius were modified as expected.\"}",
+        "generation_info": {
+          "safety_ratings": [],
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash"
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"plan_conformance\": false, \"plan_conformance_why\": \"The patch relaxes the type check on the sql argument to allow bytes, TextIOBase, and file-like objects with a read method, rather than strictly validating that sql is an instance of str as specified in the plan step.\", \"regression_risk_ok\": true, \"regression_risk_why\": \"All files in the declared blast radius were modified as expected.\"}",
+                "index": 0,
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "safety_ratings": [],
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fc784-23c8-7463-a583-bf9cf2c919dd",
+            "usage_metadata": {
+              "input_tokens": 280,
+              "output_tokens": 543,
+              "total_tokens": 823,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 450
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}
