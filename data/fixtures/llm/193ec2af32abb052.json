@@ -1,0 +1,73 @@
+{
+  "namespace": "llm",
+  "key": "193ec2af32abb052",
+  "recorded_at": "2026-07-29T13:41:33+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'$defs': {'CitationRef': {'description': \"A plan step's evidence: the retrieved chunk it relies on.\\n\\nThe PLANNER must cite at least one per step, and each must resolve into the\\nContextPack — a step that cites nothing, or cites a chunk that was never\\nretrieved, is rejected *before any code is written* (cahier §4/A2). This is the\\nsame groundedness discipline as a citation, applied to a plan.\", 'properties': {'chunk_id': {'title': 'Chunk Id', 'type': 'string'}, 'why': {'default': '', 'title': 'Why', 'type': 'string'}}, 'required': ['chunk_id'], 'title': 'CitationRef', 'type': 'object'}, 'PlanStep': {'description': 'One atomic change to one file, with the evidence that justifies it.', 'properties': {'intent': {'title': 'Intent', 'type': 'string'}, 'target_path': {'title': 'Target Path', 'type': 'string'}, 'evidence': {'items': {'$ref': '#/$defs/CitationRef'}, 'title': 'Evidence', 'type': 'array'}, 'rationale': {'default': '', 'title': 'Rationale', 'type': 'string'}}, 'required': ['intent', 'target_path'], 'title': 'PlanStep', 'type': 'object'}}, 'description': \"The PLANNER's output: an ordered, citation-backed plan (cahier §4/A2).\\n\\n``needs_more_context`` lets the planner send the turn back to the RETRIEVER\\ninstead of guessing, with ``missing`` describing what to look for — the\\n``needs_more_context`` loop of §5.1, capped so it cannot ping-pong.\", 'properties': {'summary': {'default': '', 'title': 'Summary', 'type': 'string'}, 'steps': {'items': {'$ref': '#/$defs/PlanStep'}, 'title': 'Steps', 'type': 'array'}, 'blast_radius': {'items': {'type': 'string'}, 'title': 'Blast Radius', 'type': 'array'}, 'needs_more_context': {'default': False, 'title': 'Needs More Context', 'type': 'boolean'}, 'missing': {'default': '', 'title': 'Missing', 'type': 'string'}}, 'title': 'ChangePlan', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the PLANNER for FORGE. Given a change request and numbered code snippets, produce an ordered ChangePlan: each step names the single file it edits (target_path), says what to change (intent), and lists in `evidence` the snippet NUMBER(S) that justify it \\u2014 put the number as a string in each evidence item's chunk_id (e.g. \\\"2\\\"). Cite only snippets you were given. If the snippets are not enough to plan the change, set needs_more_context=true and describe what is missing. Do not write code; only plan.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"<context>\\n\\n</context>\\n\\nChange request: hey there\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"summary\":\"Insufficient context provided\",\"steps\":[],\"blast_radius\":[],\"needs_more_context\":true,\"missing\":\"Please provide a detailed change request and the relevant code files/snippets.\"}",
+        "generation_info": {
+          "safety_ratings": [],
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash"
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"summary\":\"Insufficient context provided\",\"steps\":[],\"blast_radius\":[],\"needs_more_context\":true,\"missing\":\"Please provide a detailed change request and the relevant code files/snippets.\"}",
+                "index": 0,
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "safety_ratings": [],
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fae1a-e201-7131-85b5-321400fe3fd0",
+            "usage_metadata": {
+              "input_tokens": 137,
+              "output_tokens": 693,
+              "total_tokens": 830,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 653
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}
