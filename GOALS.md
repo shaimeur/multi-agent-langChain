@@ -283,13 +283,20 @@ fixture store — a FixtureMiss in an unrelated file. `reset_llm_cache()` + an a
 - [x] Streamed chat against `POST /v1/sessions/{id}/messages` — the typed SSE frames (`node`/`token`/`interrupt`/`done`/`error`) are parsed off a `fetch` ReadableStream (EventSource can't POST); tokens stream into a live bubble
 - [x] Agent activity timeline off the `node` frames — the visual proof of multi-agent
 - [x] Plan-approval modal and patch-approval modal → `POST /v1/sessions/{id}/approve`; the `interrupt` frame carries the payload each renders (plan table / coloured diff)
-- [x] Diff viewer, test-results panel (red → green), sessions sidebar — **citations panel still to add**
+- [x] Diff viewer, test-results panel (red → green), sessions sidebar, **citations panel**, guardrail
+      event panel, cost panel, `Index repo` button, and an explicit `Ask | Change` mode (see O8)
 - [ ] ~~Metrics page~~ — cut-list item 4. `GET /v1/metrics` exists if the day runs long enough to use it
 
 **DoD: the full §15.6 demo scenario runs in the browser with no terminal.**
 **Depends on B2** — the browser scenario needs a real model, not a scripted one.
-**Status (2026-07-29):** frontend implemented and builds (committed `web/`, `125c5db`). The in-browser
-§15.6 run is **unrun** — it needs a live API + a real model, so it lands when the daily quota resets.
+**Status (2026-08-03):** the §15.6 scenario was driven in a real browser against a live API, a real
+model and the docker sandbox. **8 of 9 beats seen on screen** — index, grounded citations, bug report,
+agent timeline, plan gate, red tests, patch gate + diff, and the guardrail firing on the planted
+comment; the repair loop closed too (reviewer `revise` → a better patch). **Not yet seen:** the Cost
+panel rendering, and beat 6's *green* half — the daily quota hit `429` mid-repair. Both are a few
+spare requests away, not new code. Three defects the browser found are fixed (`2870ad8`, `04726cc`);
+three new open items are in STATE.md as **O6** (`/v1/ask` skips the §8.2 injection scan — security),
+**O7** (retrieval cannot bridge a call hop) and **O8** (the UI, not the SUPERVISOR, picks ask vs change).
 
 ---
 
