@@ -13,9 +13,8 @@ Last commit  : 2870ad8 [D13] Make the needs_more_context retry actually re-retri
 - [x] D1–D5 foundations · AST ingestion · hybrid retrieval · RAG eval (**MiniLM FROZEN**, reranker
       OFF) · LangGraph + memory · D6 Planner+Editor · D7 Sandbox · D8 Tester+repair · D9 Reviewer+HITL
       · D10 Guardrails · D11 Red team (**C5**, 32/32) · **D12 API+CLI — C8 CLOSED**
-- [x] **C1 CLOSED** (02261ef) · **C3 CLOSED** (2026-07-28) · **B2 real-model proof** (2026-07-28)
-- [x] Gemini 3.x content fix (94c9c3d) · Worktree bug fix (f20cf22) · Retriever in the change path
-      (98f2356)
+- [x] **C1 CLOSED** (02261ef) · **C3 CLOSED** (2026-07-28) · **B2 real-model proof** (2026-07-28) ·
+      Gemini 3.x content fix (94c9c3d) · worktree fix (f20cf22) · retriever in change path (98f2356)
 - [x] **§15.6 in the browser (2026-08-03)** — live API + `gemini-flash-latest` + docker sandbox,
       driven through the React UI with no terminal. Seen on screen, in order:
       · **index** button → 202, re-index confirmed by shifted chunk spans
@@ -61,10 +60,10 @@ Last commit  : 2870ad8 [D13] Make the needs_more_context retry actually re-retri
 - **Gates: 4 of C1–C10 closed** (C1, C3, C5, C8). C7 is one Cost click + one green re-verify away.
 
 ## Do not redo
-- **Worktree path**: `create_workspace` `.resolve()`s `workspace_root` (see f20cf22).
-- **Gemini**: `gemini-2.5-*` 404s for post-cutover keys; `.content` is a block list.
-- **Planner context** capped to top-8 (`planner.py _MAX_SNIPPETS`); `retriever_node` stays optional
-  in `build_change_graph` — D9 tests inject their own pack.
+- **Worktree path**: `create_workspace` `.resolve()`s `workspace_root` (f20cf22). **Gemini**:
+  `gemini-2.5-*` 404s for post-cutover keys; `.content` is a block list. **Planner context** capped
+  to top-8 (`_MAX_SNIPPETS`); `retriever_node` stays optional in `build_change_graph` (D9 tests
+  inject their own pack).
 - **Three bugs the browser found that no test could** (2870ad8, 04726cc): `/v1/index` opened a
   *second* embedded Qdrant client for a path this process already holds; `stream_mode="messages"`
   streamed a `with_structured_output` node's raw JSON into the chat as the assistant's reply; and the
