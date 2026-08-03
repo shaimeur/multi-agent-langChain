@@ -6,8 +6,7 @@
 Last updated : 2026-08-03
 Roadmap day  : D1–D12 done · **D13 driven end-to-end in a real browser for the first time**;
                8 of §15.6's 9 beats seen on screen, the full agent pipeline among them
-Branch       : main
-Last commit  : 2870ad8 [D13] Make the needs_more_context retry actually re-retrieve
+Branch       : main · last commit b21d0a7 (code at 2870ad8, then STATE.md)
 
 ## Done (verified)
 - [x] D1–D5 foundations · AST ingestion · hybrid retrieval · RAG eval (**MiniLM FROZEN**, reranker
