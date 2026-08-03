@@ -17,15 +17,14 @@ Last commit  : 2870ad8 [D13] Make the needs_more_context retry actually re-retri
       Gemini 3.x content fix (94c9c3d) · worktree fix (f20cf22) · retriever in change path (98f2356)
 - [x] **§15.6 in the browser (2026-08-03)** — live API + `gemini-flash-latest` + docker sandbox,
       driven through the React UI with no terminal. Seen on screen, in order:
-      · **index** button → 202, re-index confirmed by shifted chunk spans
-      · **grounded citations** — `● grounded — 4 verified citations`, `sqlparse/lexer.py:155-161` …
-      · **bug report → timeline** — all six agents narrated from `node` frames
-      · **plan gate** → approved · **test author RED** (`exit=1 0 passed, 1 failed` in docker)
-      · **editor → patch gate** with coloured diff → approved · **apply** · **sandbox**
-        (`453 passed, 28 failed`) · **reviewer verdict revise** · **repair loop produced a
-        better patch** (`isinstance(sql, str)` → `(str, bytes, TextIOBase)` + `hasattr(sql,'read')`)
-      · **guardrail fired visibly** — `[REDACTED] injection.override … lexer.py:155-165`, the panel
-        auto-switched to it. The model never obeyed the planted instruction.
+      · **index** → 202, confirmed by shifted chunk spans · **grounded citations**
+        (`● grounded — 4 verified citations`) · **bug report → timeline**, all six agents
+      · **plan gate** → approved · **test author RED** (`exit=1 0 passed, 1 failed`, docker) ·
+        **patch gate** with coloured diff → approved · **apply** · **sandbox** (`453 passed, 28
+        failed`) · **reviewer: revise** · **repair loop produced a better patch**
+        (`isinstance(sql, str)` → `(str, bytes, TextIOBase)` + `hasattr(sql,'read')`)
+      · **guardrail fired visibly** — `[REDACTED] injection.override … lexer.py:155-165`, panel
+        auto-switched. The model never obeyed the planted instruction.
 - [x] Full suite — `CACHE_MODE=replay uv run pytest` → **366 passed, 6 skipped, exit 0**;
       `make lint` clean; `npm run build` exit 0, oxlint clean (all at 2870ad8)
 
@@ -77,7 +76,6 @@ Last commit  : 2870ad8 [D13] Make the needs_more_context retry actually re-retri
 
 ## Notes for the next session
 - Real runs: `QDRANT_URL= CACHE_MODE=auto SANDBOX_BACKEND=docker
-  GEMINI_CODER_MODEL=GEMINI_REASONER_MODEL=gemini-flash-latest`. Blank `QDRANT_URL` or the embedded
-  index is bypassed. Commits OMIT the Claude trailer (author Shaimeur).
-- Web: `cd web && npm run dev` proxies `/v1` → :8000. API: `make api`.
-- 8 new fixtures recorded today (no key material — LangChain serialises secrets by reference).
+  GEMINI_CODER_MODEL=GEMINI_REASONER_MODEL=gemini-flash-latest` — blank `QDRANT_URL` or the embedded
+  index is bypassed. `cd web && npm run dev` proxies `/v1` → :8000; API via `make api`. Commits OMIT
+  the Claude trailer. 8 fixtures recorded today (no key material — secrets serialise by reference).
