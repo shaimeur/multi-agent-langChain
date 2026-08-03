@@ -54,14 +54,14 @@ after running it.
 | # | Criterion | Proof | Done |
 |---|---|---|---|
 | C1 | ≥4 specialised agents, distinct responsibilities | `ls src/forge/core/agents/` → 6 files, and `uv run pytest tests/test_agents.py -k distinct` asserting distinct prompt + tool set + output schema per agent | **[x]** |
-| C2 | The 5 collaboration forms are demonstrable | `notebooks/02_agent_traces.ipynb` — one annotated run showing handoff, delegation (`needs_more_context`), repair loop, reviewer vote, `interrupt()` | [ ] |
+| C2 | The 5 collaboration forms are demonstrable | `notebooks/02_agent_traces.ipynb` — built from `data/checkpoints.sqlite`, all cells executed. Handoff, delegation, repair loop (3 editor passes) and `interrupt()` (×3) are shown firing in a real run; **form 4 (contested/escalation) is wired but did not fire** and is covered by `tests/test_review_hitl.py` | **[x]** (form 4 shown as wired, not fired) |
 | C3 | Full RAG pipeline, ingestion → grounded generation | `uv run forge index data/target && uv run forge ask "where is X handled"` → answer with `file:line` citations; `uv run pytest evals/test_citations_resolve.py` | **[x]** |
-| C4 | Short-term memory works | `scripts/c4_restart_resume.sh` — start a session, `docker compose restart api` mid-run, resume from the checkpoint and get the same thread back | [ ] |
+| C4 | Short-term memory works | Network-free proof passes: `CACHE_MODE=replay uv run pytest tests/test_graph.py -k restart` → exit 0. The container-restart variant is scripted inside `scripts/clean_machine_test.sh` and runs when C9 does | **[~]** code proven, container variant pending C9 |
 | C5 | Guardrails on input, output and tools | `uv run pytest evals/security -q` green, and `curl -s localhost:8000/v1/guardrails/events \| jq length` > 0 after a run | **[x]** |
-| C6 | External tools connected | `uv run forge tools` lists 10, and `uv run pytest tests/test_tools.py -k count` asserts 10 bound. **MCP: see O2 — fix the criterion text before claiming this** | [ ] |
+| C6 | External tools connected | `uv run forge tools` → **"FORGE tools — 10 operational"**; `tests/test_registry.py` invokes all seven knowledge tools and asserts the two path-taking ones refuse an escape. **MCP transport is NOT built** (cut-list item 1) — so the "et via MCP" half is unmet; O2 still needs settling | **[~]** Tools half done |
 | C7 | Working user interface | The 4-minute §15.6 script run end to end in the browser, screen-recorded to `docs/demo.mp4` | [ ] |
 | C8 | API exposed | `curl -s localhost:8000/openapi.json \| jq '.paths \| keys'` shows all §11 routes; `scripts/sse_smoke.sh` streams events | **[x]** |
-| C9 | Containerised deployment | `scripts/clean_machine_test.sh` — fresh clone into an empty dir, `cp .env.example .env && docker compose up`, all healthchecks green, on a machine that has never seen the project | [ ] |
+| C9 | Containerised deployment | `scripts/clean_machine_test.sh` written and it already found five defects (all fixed). **The run is pending**: this build sandbox's Docker daemon cannot reach the registry, so `node:22-slim` will not pull. Run it on a machine with egress | [ ] |
 | C10 | Deliverables complete | L1 cahier · L2 repo+README+requirements.txt+ADRs+evaluation.md+limitations.md · L3 two notebooks · L4 Dockerfiles+compose · L5 live demo + video · L6 12 slides | [ ] |
 
 ---

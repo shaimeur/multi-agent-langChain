@@ -26,8 +26,10 @@ approval gates, sandboxed tests, review, and the repair loop. **373 tests green*
 | 4 — Interfaces | D12–D13 | FastAPI + SSE, `forge` CLI, React UI | **done** |
 | 5 — Integration | D14–D15 | Compose, benchmark, docs, defence | **in progress** |
 
-Acceptance gates (cahier §16): **C1, C3, C5, C6, C8 closed**; C4 proven network-free
-(`pytest -k restart`) with the container-restart variant scripted; C2, C7, C9, C10 in progress.
+Acceptance gates (cahier §16): **C1, C2, C3, C5, C8 closed**. C4 is proven network-free
+(`pytest -k restart`) with the container-restart variant scripted into the C9 test. **C6 is half
+closed** — ten tools are operational as LangChain Tools, but the cahier also asks for MCP transport,
+which is not built (cut-list item 1). C7, C9, C10 in progress.
 Nothing here is marked done without the command that proved it — see `docs/STATE.md`.
 
 **What does not work yet, honestly.** Retrieval cannot follow a call graph, so a bug report that
