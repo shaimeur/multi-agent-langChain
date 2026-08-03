@@ -8,73 +8,93 @@ the test suite in a hardened sandbox, and only then shows you a verified, cited 
 
 *Projet de fin de formation — Systèmes Multi-Agents & RAG.*
 Specification: [`docs/cahier-des-charges.md`](docs/cahier-des-charges.md) ·
-Scope decisions: [`docs/descope-v1.md`](docs/descope-v1.md)
+Scope decisions: [`docs/descope-v1.md`](docs/descope-v1.md) ·
+Architecture: [`docs/architecture.md`](docs/architecture.md)
 
 ---
 
 ## Status
 
-Day 7 of 15. Ingestion, hybrid retrieval, a **runnable grounded-RAG service** (`forge ask` /
-`POST /v1/ask`), the checkpointed LangGraph, the Planner/Editor patch path and the **hardened
-execution sandbox** work today. The repair loop, guardrails and web UI land over the coming sprints.
+Day 14 of 15. The full pipeline runs end to end in a browser: retrieval, planning, both human
+approval gates, sandboxed tests, review, and the repair loop. **373 tests green**, fully offline.
 
 | Sprint | Days | Delivers | State |
 |---|---|---|---|
 | 1 — Foundations & RAG | D1–D4 | Skeleton, ingestion, retrieval, RAG ablation | **done** |
-| 2 — Agents | D5–D9 | LangGraph, Planner/Editor, sandbox, repair loop, HITL | **in progress** (D7 done) |
-| 3 — Guardrails | D10–D11 | Sentinels, policy engine, adversarial suite | planned |
-| 4 — Interfaces | D12–D13 | FastAPI + SSE, `forge` CLI, web UI | planned |
-| 5 — Integration | D14–D15 | Compose, benchmark, docs, defense | planned |
+| 2 — Agents | D5–D9 | LangGraph, Planner/Editor, sandbox, repair loop, HITL | **done** |
+| 3 — Guardrails | D10–D11 | Sentinels, policy engine, adversarial suite | **done** (32/32) |
+| 4 — Interfaces | D12–D13 | FastAPI + SSE, `forge` CLI, React UI | **done** |
+| 5 — Integration | D14–D15 | Compose, benchmark, docs, defence | **in progress** |
 
-What works today: AST-aware ingestion, hybrid retrieval (dense + sparse + ripgrep, RRF-fused) with
-`file:line` citations, and a grounded question-answering service whose every citation is verified in
-code against what was retrieved. Plus the record/replay fixture layer, the multi-provider LLM
-factory, the health/search/ask API, a checkpointed multi-turn graph that survives restart, a
-citation-backed plan → validated `PatchSet` path that never writes to disk unchecked, and an
-execution sandbox that runs tests in an ephemeral container with no network, a read-only root and
-memory/CPU/PID caps — with the fallback's gaps written down in
-[`docs/limitations.md`](docs/limitations.md). **206 tests green.**
+Acceptance gates (cahier §16): **C1, C3, C5, C6, C8 closed**; C4 proven network-free
+(`pytest -k restart`) with the container-restart variant scripted; C2, C7, C9, C10 in progress.
+Nothing here is marked done without the command that proved it — see `docs/STATE.md`.
 
-## Quickstart
+**What does not work yet, honestly.** Retrieval cannot follow a call graph, so a bug report that
+describes a symptom two hops from the fix site will not find it (O7). The `/v1/ask` path does not run
+the indirect-injection scan that the change path runs (O6). The UI, not the supervisor, decides
+whether a message is a question or a change request (O8). All three are in `docs/STATE.md`.
 
-Runs locally with **no cloud API key** — it answers with the Ollama model on your machine.
+---
+
+## Quickstart — one command
+
+```bash
+cp .env.example .env        # defaults to CACHE_MODE=replay: no API key needed
+docker compose up --build   # qdrant + api, and the React UI at the same origin
+```
+
+Then open **http://localhost:8000**. The container fetches the demo target repository
+(sqlparse, pinned) on first boot and serves the built SPA itself, so there is nothing else to start.
+
+Verify it the way the acceptance gate does:
+
+```bash
+scripts/clean_machine_test.sh    # clones HEAD into an empty dir and brings it up there (C9)
+```
+
+## Quickstart — local development
 
 ```bash
 make install
-cp .env.local.example .env      # local profile: Ollama (mistral), embedded Qdrant
-ollama pull mistral             # if you don't have it already
-make test                       # 206 tests, fully offline
-make sandbox-image              # optional: build the hardened sandbox image (needs Docker)
+cp .env.example .env
+make test                        # 373 tests, fully offline
+make sandbox-image               # optional: the hardened sandbox image (needs Docker)
+
+uv run forge index data/target --full        # ingest — 617 chunks from 59 files
+uv run forge search "how are SQL comments stripped"
+uv run forge ask "how does sqlparse split statements?"
+uv run forge tools                           # the ten callable tools (C6)
+uv run forge fix "quoted identifiers keep a trailing quote"
 ```
 
-Without that image — or on a machine with no Docker socket — the sandbox degrades to a documented
-`subprocess` fallback that is **not** a security boundary. Every `ExecutionReport` records which one
-ran, and the gap is spelled out in [`docs/limitations.md`](docs/limitations.md) §1.
-
-Index a repository, then search and ask it questions — grounded, with citations:
+The web UI in development runs separately and proxies `/v1` to the API:
 
 ```bash
-uv run forge index data/target                          # ingest (sqlparse, ADR-003)
-uv run forge search "how are SQL comments stripped"     # hybrid retrieval → path:line
-uv run forge ask "how does sqlparse split statements?"  # grounded answer + verified citations
+make api                         # http://localhost:8000/docs
+cd web && npm run dev            # http://localhost:5173
 ```
 
-Or over HTTP:
+Without the sandbox image — or on a machine with no Docker socket — the sandbox degrades to a
+documented `subprocess` fallback that is **not** a security boundary. Every `ExecutionReport` records
+which one ran, and the gap is spelled out in [`docs/limitations.md`](docs/limitations.md) §1.
+
+## Using it on your own project
+
+FORGE targets **one repository per process**, set by `TARGET_REPO`. It is not switchable from the
+UI — multi-repo is declared future work (cahier §12).
 
 ```bash
-make api                                                # http://localhost:8000/docs
-curl -sX POST localhost:8000/v1/ask \
-     -H 'content-type: application/json' \
-     -d '{"question":"how are statements split?"}' | jq
+TARGET_REPO=/abs/path/to/your/project        # in .env
+uv run forge index /abs/path/to/your/project --full
+make api
 ```
 
-To use a hosted model instead, set `LLM_PROVIDER=gemini` and `GOOGLE_API_KEY` in `.env`. Full stack
-under Docker:
-
-```bash
-docker compose up                      # qdrant + api
-docker compose --profile offline up    # ... plus a local Ollama
-```
+`--full` is not optional when changing repositories: it recreates the collection. An incremental
+index would leave the previous repo's chunks in place, and retrieval has no repo filter to separate
+them. Your project must be a **git repo with at least one commit** (sessions are git worktrees), and
+**Python** — the AST chunker handles `.py/.pyi`, plus markdown and config. The change path
+additionally needs a pytest suite.
 
 ## How it stays reproducible
 
@@ -88,19 +108,43 @@ CACHE_MODE=replay  ...   # disk only. A miss raises. This is what the demo runs.
 ```
 
 Those fixtures are committed on purpose: a fresh clone with no API keys reproduces the graded demo.
-It covers strictly more failure modes than a local-model fallback does — spent quota, provider
-outage, and model drift between rehearsal and defense, not just a dead network. Secrets are stripped
-on write and never take part in a cache key.
+It covers strictly more failure modes than a local-model fallback — spent quota, provider outage, and
+model drift between rehearsal and defence, not just a dead network. Secrets are stripped on write and
+never take part in a cache key.
+
+> **Re-index `--full` after restoring the target repo, then run `forge ask` in replay.** A fixture
+> key includes the prompt, and the prompt embeds retrieved snippets — so an incremental re-index that
+> reorders the top-8 invalidates every recorded answer at once, with the repo looking perfectly clean.
 
 ## Configuration
 
-`.env.example` documents every setting. The three that matter most:
+`.env.example` documents every setting. The ones that matter most:
 
 | Variable | Why it matters |
 |---|---|
 | `CACHE_MODE` | `replay` is the offline guarantee. Anything else may hit the network. |
 | `LLM_PROVIDER` | `gemini` (default) / `groq` / `ollama`. Three roles per provider — router, reasoner, coder — so the token-fat tiers are used sparingly. |
+| `TARGET_REPO` | The one repository FORGE reads and patches. |
+| `QDRANT_URL` | Blank uses the embedded index at `QDRANT_PATH`. Only one process may hold it at a time. |
 | `RERANK_ENABLED` | Off. The cross-encoder is measured in the eval harness, not run live — no GPU on the build machine. |
+
+## API
+
+`GET /docs` for the full OpenAPI. Twelve routes; the ones that matter:
+
+| Route | Purpose |
+|---|---|
+| `POST /v1/ask` | grounded answer with verified citations |
+| `POST /v1/search` | hybrid retrieval, **no LLM** — always available |
+| `POST /v1/sessions` · `/{id}/messages` | create a session; stream a run over SSE |
+| `POST /v1/sessions/{id}/approve` | resume a run paused at a §5.5 gate |
+| `GET /v1/guardrails/events` | the §8.5 log, queryable by session, stage and action |
+| `GET /v1/metrics` | turns, LLM calls, tokens, latency, guardrail counts |
+
+## Evaluation
+
+RAG ablation and the `swe_mini` repair benchmark: [`docs/evaluation.md`](docs/evaluation.md).
+Notebooks: `notebooks/01_rag_evaluation.ipynb`, `notebooks/02_agent_traces.ipynb`.
 
 ## Deliberate deviations from the cahier
 
@@ -111,13 +155,14 @@ and ~300k input tokens.
 | Cahier | Here | Because |
 |---|---|---|
 | §7 `AsyncPostgresSaver` | `AsyncSqliteSaver` | Postgres buys multi-writer concurrency, which §3.2 puts out of scope. C4 passes identically. |
-| §12.3 eight services | four | C9's test is a clean machine — the examiner's laptop. Four that start beat eight that OOM. |
+| §12.3 eight services | four (two by default) | C9's test is a clean machine — the examiner's laptop. Two that start beat eight that OOM; `ollama` and `sandbox-image` sit behind profiles. |
 | §6.5 live reranker | eval harness only | No GPU. The ablation table reports what that costs. |
 | §13.3 ten `swe_mini` bugs | four | Quota. Four with honest numbers beats ten extrapolated. |
-| §6.1 `docs` corpus | cut | A second ingestion pipeline; the injection demo uses a poisoned repo comment and needs no external docs. |
+| §6.1 `docs` corpus | cut | A second ingestion pipeline; the injection demo uses a poisoned repo comment. |
+| §9 tools via MCP | LangChain Tools only | Cut-list item 1. The ten tools are operational; MCP transport is not built. |
 
-**Open:** §10.1 mandates React. If the training's own requirement list accepts Streamlit, the web
-UI ships as Streamlit and buys back ~2 days. Unresolved — see descope §2.
+§10.1's React requirement was **kept** (O1, resolved D13): `web/` is a Vite + TypeScript + Tailwind
+build, served by the API in the container.
 
 ## Layout
 
@@ -126,13 +171,14 @@ src/forge/
 ├── config.py        settings, model routing, budget + sandbox caps
 ├── cache/           record/replay fixture store
 ├── llm/             provider-agnostic chat model factory
-├── core/            LangGraph state, agents, the graph        (D5-D9)
-├── rag/             ingest, AST chunking, embed, retrieve, answer  (D2-D3)
-├── sandbox/         hardened ephemeral executor               (D7)
-├── guardrails/      sentinel_in / sentinel_out / policy       (D10)
-├── tools/           ripgrep + AST symbols now; git, pytest    (D3, D6-D7)
-├── api/             FastAPI: health, search, ask; SSE          (D3, D12)
-└── cli/             the `forge` command                       (D12)
+├── core/            LangGraph state, the six agents, workspaces
+├── rag/             ingest, AST chunking, embed, retrieve, answer
+├── sandbox/         hardened ephemeral executor
+├── guardrails/      sentinel_in / injection / policy / sentinel_out
+├── tools/           the ten callable tools + registry
+├── api/             FastAPI: §11 routes, SSE, session store
+└── cli/             the `forge` command
+web/                 React + Vite + Tailwind SPA (separate build)
 ```
 
 The cahier's §12.4 splits this across three installable packages. It is one package here, with the
