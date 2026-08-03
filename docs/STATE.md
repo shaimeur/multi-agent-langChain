@@ -38,7 +38,6 @@ Branch       : main
 - **C7** — beat 6's *green* half: red→revise→better-patch is proven, the re-verify after the repair
   is not (429 mid-run). Needs ~5 spare requests. Also `docs/demo.mp4` (D15, human).
 - **C10** — L1 ✓ L2 ✓ L3 ✓ L4 ✓ L6 ✓ (draft) · **L5 needs the recorded video**.
-- **swe_mini numbers** for `docs/evaluation.md` — needs quota.
 
 ## Blocked / open decisions
 - **O6 (security) — `/v1/ask` does not run the §8.2 injection scan.** `scan_chunks` is called from
