@@ -42,6 +42,7 @@ dependencies = [
     "pydantic>=2.10",
     "pydantic-settings>=2.7",
     "python-dotenv>=1.0",
+    "mcp>=2.0.0",
 ]
 
 [project.optional-dependencies]

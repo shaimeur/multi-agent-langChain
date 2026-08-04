@@ -16,7 +16,7 @@ Architecture: [`docs/architecture.md`](docs/architecture.md)
 ## Status
 
 Day 14 of 15. The full pipeline runs end to end in a browser: retrieval, planning, both human
-approval gates, sandboxed tests, review, and the repair loop. **373 tests green**, fully offline.
+approval gates, sandboxed tests, review, and the repair loop. **383 tests green**, fully offline.
 
 | Sprint | Days | Delivers | State |
 |---|---|---|---|
@@ -26,16 +26,17 @@ approval gates, sandboxed tests, review, and the repair loop. **373 tests green*
 | 4 — Interfaces | D12–D13 | FastAPI + SSE, `forge` CLI, React UI | **done** |
 | 5 — Integration | D14–D15 | Compose, benchmark, docs, defence | **in progress** |
 
-Acceptance gates (cahier §16): **C1, C2, C3, C5, C8 closed**. C4 is proven network-free
-(`pytest -k restart`) with the container-restart variant scripted into the C9 test. **C6 is half
-closed** — ten tools are operational as LangChain Tools, but the cahier also asks for MCP transport,
-which is not built (cut-list item 1). C7, C9, C10 in progress.
+Acceptance gates (cahier §16): **C1–C6, C8 and C9 closed.** C4 is proven network-free
+(`pytest -k restart`) *and* by a container restart inside the C9 clean-machine run. C6 is closed on
+both halves — the ten tools are LangChain Tools and are served over MCP (`forge mcp`,
+`scripts/mcp_smoke.py`). **C7 and C10 remain open on one thing only: the recorded demo video.**
 Nothing here is marked done without the command that proved it — see `docs/STATE.md`.
 
 **What does not work yet, honestly.** Retrieval cannot follow a call graph, so a bug report that
-describes a symptom two hops from the fix site will not find it (O7). The `/v1/ask` path does not run
-the indirect-injection scan that the change path runs (O6). The UI, not the supervisor, decides
-whether a message is a question or a change request (O8). All three are in `docs/STATE.md`.
+describes a symptom two hops from the fix site will not find it — that is `docs/limitations.md` §8,
+and it is why the `swe_mini` score is scoped to the repair loop rather than the whole system. The UI,
+not the supervisor, decides whether a message is a question or a change request (O8). Injection
+tier 2 — a classifier behind the heuristics — is not built (`limitations.md` §7).
 
 ---
 
@@ -60,7 +61,7 @@ scripts/clean_machine_test.sh    # clones HEAD into an empty dir and brings it u
 ```bash
 make install
 cp .env.example .env
-make test                        # 373 tests, fully offline
+make test                        # 383 tests, fully offline
 make sandbox-image               # optional: the hardened sandbox image (needs Docker)
 
 uv run forge index data/target --full        # ingest — 617 chunks from 59 files
@@ -68,6 +69,15 @@ uv run forge search "how are SQL comments stripped"
 uv run forge ask "how does sqlparse split statements?"
 uv run forge tools                           # the ten callable tools (C6)
 uv run forge fix "quoted identifiers keep a trailing quote"
+```
+
+The same ten tools are also served over MCP, so another agent can use FORGE's retrieval and its
+sandbox. It speaks JSON-RPC on stdio, so launch it from a client's config rather than by hand —
+`uv run python scripts/mcp_smoke.py` spawns it and exercises the protocol end to end:
+
+```jsonc
+// e.g. ~/.claude.json  ->  "mcpServers"
+"forge": { "command": "/abs/path/to/.venv/bin/forge", "args": ["mcp"] }
 ```
 
 The web UI in development runs separately and proxies `/v1` to the API:
@@ -161,7 +171,7 @@ and ~300k input tokens.
 | §6.5 live reranker | eval harness only | No GPU. The ablation table reports what that costs. |
 | §13.3 ten `swe_mini` bugs | four | Quota. Four with honest numbers beats ten extrapolated. |
 | §6.1 `docs` corpus | cut | A second ingestion pipeline; the injection demo uses a poisoned repo comment. |
-| §9 tools via MCP | LangChain Tools only | Cut-list item 1. The ten tools are operational; MCP transport is not built. |
+| §9 tools via MCP | **built** — both surfaces | Not descoped after all. §16's C6 says "Tools *and* MCP" while the cut list called MCP droppable because the requirement says "or" (O2). Building it settles the contradiction instead of arguing it. |
 
 §10.1's React requirement was **kept** (O1, resolved D13): `web/` is a Vite + TypeScript + Tailwind
 build, served by the API in the container.
@@ -178,6 +188,7 @@ src/forge/
 ├── sandbox/         hardened ephemeral executor
 ├── guardrails/      sentinel_in / injection / policy / sentinel_out
 ├── tools/           the ten callable tools + registry
+├── mcp/             the same ten over MCP — reflected, not reimplemented
 ├── api/             FastAPI: §11 routes, SSE, session store
 └── cli/             the `forge` command
 web/                 React + Vite + Tailwind SPA (separate build)

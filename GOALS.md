@@ -58,7 +58,7 @@ after running it.
 | C3 | Full RAG pipeline, ingestion → grounded generation | `uv run forge index data/target && uv run forge ask "where is X handled"` → answer with `file:line` citations; `uv run pytest evals/test_citations_resolve.py` | **[x]** |
 | C4 | Short-term memory works | Network-free proof passes: `CACHE_MODE=replay uv run pytest tests/test_graph.py -k restart` → exit 0. The container-restart variant inside `scripts/clean_machine_test.sh` **also ran (2026-08-04)**: a session created before `docker compose restart api` still answered `/history` after it | **[x]** both halves |
 | C5 | Guardrails on input, output and tools | `uv run pytest evals/security -q` green, and `curl -s localhost:8000/v1/guardrails/events \| jq length` > 0 after a run | **[x]** |
-| C6 | External tools connected | `uv run forge tools` → **"FORGE tools — 10 operational"**; `tests/test_registry.py` invokes all seven knowledge tools and asserts the two path-taking ones refuse an escape. **MCP transport is NOT built** (cut-list item 1) — so the "et via MCP" half is unmet; O2 still needs settling | **[~]** Tools half done |
+| C6 | External tools connected | **Both halves (2026-08-04).** Tools: `uv run forge tools` → "FORGE tools — 10 operational"; `tests/test_registry.py` invokes all seven knowledge tools and asserts the two path-taking ones refuse an escape. MCP: `uv run python scripts/mcp_smoke.py` → **exit 0, "C6/MCP PASS"** — a *separate process* running `forge mcp`, real JSON-RPC on stdio, tools discovered with usable schemas, a call returning real repo content, and a path escape refused over MCP too. Plus `tests/test_mcp.py` (9). **O2 settled by building it** | **[x]** |
 | C7 | Working user interface | The 4-minute §15.6 script run end to end in the browser, screen-recorded to `docs/demo.mp4` | [ ] |
 | C8 | API exposed | `curl -s localhost:8000/openapi.json \| jq '.paths \| keys'` shows all §11 routes; `scripts/sse_smoke.sh` streams events | **[x]** |
 | C9 | Containerised deployment | `API_PORT=18000 scripts/clean_machine_test.sh` → **exit 0, "C9 PASS" (2026-08-04)**. A depth-1 clone of `84d1a9f` with no `.env`, no `data/qdrant/` and no `node_modules`: `docker compose up --build` alone gave a healthy API, the SPA on the same origin, an index built inside the container, and a session that survived a restart | **[x]** |
@@ -337,7 +337,7 @@ the cahier's §14 order.
 
 | # | Cut | Status |
 |---|---|---|
-| 1 | MCP server — keep the LangChain tools. **Fix C6 first** (O2) | available |
+| 1 | MCP server — keep the LangChain tools. **Fix C6 first** (O2) | **not taken** — built on D15 instead |
 | 2 | Cross-session long-term memory / `langgraph.store` | available |
 | 3 | Multi-language — Python only, drop the TS/TSX chunker | **taken** on D2 |
 | 4 | Metrics page in the UI — show LangSmith instead | available |
@@ -365,7 +365,7 @@ O3 — approved in code, not yet folded back into the cahier.
 | §6.1 two corpora (`code` + `docs`) | `code` only; `web_docs_search` dropped | A second full ingestion pipeline (URL fetch, PDF parse, different chunking) for marginal value. The injection demo uses a poisoned repo comment and needs no external docs |
 | §12.4 three installable packages | One package, same conceptual boundaries | A solo 14-day build does not repay monorepo overhead |
 | §6.5 query rewrite on every query | Rewrite gated — identifier-shaped queries go straight to ripgrep + sparse | Rewriting a literal symbol adds latency and tokens and *degrades* precision. This is the concrete form of "grep beats embeddings for exact symbols" |
-| §16 C6 "Tools **and** MCP" | Unresolved — **O2** | §14's cut list says MCP is cuttable because the requirement says "or". Both cannot be true. Fix the criterion or drop the cut |
+| §16 C6 "Tools **and** MCP" | **Not descoped — O2 settled on D15 by building it.** `src/forge/mcp/` reflects `build_toolset()`; `forge mcp` serves it on stdio | §14's cut list called MCP droppable because the requirement says "or", while §16's own row says "et". Both could not be true, and arguing the wording is worth less than a working server. Reflecting the registry rather than reimplementing it made it small: no new capability, and the path confinement it inherits is the same one `tests/test_registry.py` covers |
 
 ---
 

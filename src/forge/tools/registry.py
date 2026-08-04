@@ -11,7 +11,9 @@ Two rules the wrappers exist to enforce:
 is the shortest route to reading ``/etc/passwd``, so ``read_file`` and ``list_files``
 resolve their argument and confine it to a root — the session worktree when there is
 one, otherwise the indexed target repo. A refusal is a logged §8.5 event, not just an
-exception, which is what makes the guarantee auditable rather than merely claimed.
+exception, which is what makes the guarantee auditable rather than merely claimed —
+and it is logged to *these* settings' database rather than the process default, or
+``guardrail_events`` would read a file the refusals never reached.
 
 **No tool returns a raw object.** Every result is a string or a plain dict, because
 the caller may be a model and a model cannot be handed a `SearchHit`.
@@ -113,9 +115,11 @@ def _symbols(fn, symbol: str, root: Path, limit: int) -> str:
     return "\n".join(f"{h.path}:{h.line} {h.kind} {h.name}" for h in hits)
 
 
-def _read_file(root: Path, path: str, start_line: int, end_line: int, session_id: str) -> str:
+def _read_file(
+    root: Path, path: str, start_line: int, end_line: int, session_id: str, settings: Settings
+) -> str:
     target = (root / path).resolve()
-    decision = check_path(target, root, session_id=session_id, write=False)
+    decision = check_path(target, root, session_id=session_id, write=False, log=get_log(settings))
     if not decision:
         return f"refused: {decision.detail}"
     if not target.is_file():
@@ -131,9 +135,11 @@ def _read_file(root: Path, path: str, start_line: int, end_line: int, session_id
     return body[:_MAX_BYTES] or "(empty range)"
 
 
-def _list_files(root: Path, subdir: str, pattern: str, limit: int, session_id: str) -> str:
+def _list_files(
+    root: Path, subdir: str, pattern: str, limit: int, session_id: str, settings: Settings
+) -> str:
     base = (root / subdir).resolve() if subdir else root
-    decision = check_path(base, root, session_id=session_id, write=False)
+    decision = check_path(base, root, session_id=session_id, write=False, log=get_log(settings))
     if not decision:
         return f"refused: {decision.detail}"
     if not base.is_dir():
@@ -214,7 +220,7 @@ def build_toolset(
         ),
         StructuredTool.from_function(
             func=lambda path, start_line=1, end_line=0: _read_file(
-                root, path, start_line, end_line, session_id
+                root, path, start_line, end_line, session_id, settings
             ),
             name="read_file",
             description=(
@@ -225,7 +231,7 @@ def build_toolset(
         ),
         StructuredTool.from_function(
             func=lambda subdir="", pattern="*", limit=200: _list_files(
-                root, subdir, pattern, limit, session_id
+                root, subdir, pattern, limit, session_id, settings
             ),
             name="list_files",
             description="List files under the repository root, optionally filtered by a glob.",

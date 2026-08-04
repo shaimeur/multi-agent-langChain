@@ -111,6 +111,55 @@ def tools(
 
 
 @app.command()
+def mcp(
+    session: str | None = typer.Option(
+        None,
+        "--session",
+        "-s",
+        help="Bind the worktree to this session id instead of a throwaway one.",
+    ),
+    no_sandbox: bool = typer.Option(
+        False, "--no-sandbox", help="Expose the seven knowledge tools only."
+    ),
+) -> None:
+    """Serve the same tools over MCP on stdio (cahier 9, gate C6).
+
+    The other half of `forge tools`: identical capabilities, spoken to a client
+    outside this process. Launch it from an MCP client's config rather than by hand
+    — it speaks the protocol on stdout and reads it on stdin, so a terminal will
+    show nothing and a stray print would corrupt the channel. Progress goes to
+    stderr for that reason.
+
+    The worktree is torn down when the client disconnects. With `--session` it is
+    named after the session, which is what makes a sandbox run inspectable
+    afterwards; without one it is a throwaway.
+    """
+    from forge.core.workspace import create_workspace, remove_workspace
+    from forge.mcp import build_mcp_server, serve_stdio
+
+    settings = get_settings()
+    stderr = Console(stderr=True)
+    session_id = session or f"mcp-{uuid.uuid4().hex[:8]}"
+
+    workspace = None
+    if not no_sandbox:
+        try:
+            workspace = create_workspace(session_id, settings=settings)
+        except Exception as error:  # noqa: BLE001 — no target repo is not fatal, just smaller
+            stderr.print(f"[yellow]No worktree ({error}); sandbox tools omitted.[/]")
+
+    try:
+        server = build_mcp_server(settings=settings, workspace=workspace, session_id=session_id)
+        stderr.print(f"[dim]forge mcp — session {session_id}, serving on stdio[/]")
+        asyncio.run(serve_stdio(server))
+    except KeyboardInterrupt:  # pragma: no cover — a client disconnect is not an error
+        pass
+    finally:
+        if workspace is not None:
+            remove_workspace(workspace)
+
+
+@app.command()
 def index(
     path: Path = typer.Argument(..., help="Repository to ingest."),
     full: bool = typer.Option(False, "--full", help="Rebuild instead of reindexing the git diff."),

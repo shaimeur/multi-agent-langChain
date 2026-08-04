@@ -44,8 +44,9 @@ One Python package, `src/forge/`, plus a separate React build in `web/`.
 | `sandbox/` | running untrusted code in a hardened, throwaway container |
 | `guardrails/` | the three defence layers and the queryable event log |
 | `tools/` | the ten externally-callable tools (C6) |
+| `mcp/` | the same ten, reflected over MCP — no capability of its own (C6) |
 | `api/` | the §11 HTTP surface, SSE streaming, session store |
-| `cli/` | `forge config | index | search | ask | tools | fix` |
+| `cli/` | `forge config | index | search | ask | tools | mcp | fix` |
 | `llm/` | provider construction and the fixture cache that makes runs replayable |
 
 ---
@@ -150,7 +151,7 @@ and ranked 2nd only once the report *named* it.
 | Layer | Where | Catches |
 |---|---|---|
 | `sentinel_in` | before retrieval | oversized input, secrets in the prompt, direct injection, out-of-scope requests |
-| `injection` | in the **retriever**, on retrieved chunks | §8.2 indirect injection — a malicious instruction planted in someone else's code |
+| `injection` | on retrieved chunks, on **both** paths | §8.2 indirect injection — a malicious instruction planted in someone else's code |
 | `policy` | before any tool or filesystem call | path escapes, denied components, forbidden git verbs |
 | `sentinel_out` | before anything leaves | unverifiable citations, secrets in generated code, diffs that do not apply |
 
@@ -162,10 +163,13 @@ The tier-2 scan is the interesting one. A comment reading *"Ignore all previous
 instructions…"* planted in `sqlparse/lexer.py` was **redacted from the pack before the
 planner saw it**, logged as `injection.override`, and the model never acted on it.
 
-**The known gap (O6).** `scan_chunks` is called from exactly one place —
-`core/agents/retriever.py`. The ask path retrieves through `rag/answer.py`, which has
-both sentinels but **no chunk scan**, so indirect injection is currently caught on the
-change path only.
+**Both doors, one seam (O6, closed D15).** The scan runs where third-party text becomes
+prompt, and there are two such lines, not one: `core/agents/retriever.py` for the change
+path and `rag/answer.py` for the ask path. Until D15 only the first called it, so a
+poisoned comment reached the prompt through `POST /v1/ask` — which is the route the UI's
+*Ask* button uses. Both now scan. The property that let this land at freeze time without
+touching a single replay fixture: `scan_chunks` returns a clean chunk as the *same
+object*, so on an unpoisoned corpus the prompt is byte-identical.
 
 ---
 
