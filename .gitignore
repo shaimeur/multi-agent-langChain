@@ -21,6 +21,13 @@ build/
 data/qdrant/
 data/workspaces/
 data/target/
+
+# The same state, but stray. The rules above are anchored at the repo root, so a
+# `forge` run from a subdirectory with a relative QDRANT_PATH lands an empty
+# embedded index somewhere git still tracks (web/data/qdrant/ is the one that
+# actually happened). It is never worth committing, wherever it lands.
+**/data/qdrant/
+**/data/workspaces/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

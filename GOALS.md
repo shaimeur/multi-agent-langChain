@@ -56,12 +56,12 @@ after running it.
 | C1 | ≥4 specialised agents, distinct responsibilities | `ls src/forge/core/agents/` → 6 files, and `uv run pytest tests/test_agents.py -k distinct` asserting distinct prompt + tool set + output schema per agent | **[x]** |
 | C2 | The 5 collaboration forms are demonstrable | `notebooks/02_agent_traces.ipynb` — built from `data/checkpoints.sqlite`, all cells executed. Handoff, delegation, repair loop (3 editor passes) and `interrupt()` (×3) are shown firing in a real run; **form 4 (contested/escalation) is wired but did not fire** and is covered by `tests/test_review_hitl.py` | **[x]** (form 4 shown as wired, not fired) |
 | C3 | Full RAG pipeline, ingestion → grounded generation | `uv run forge index data/target && uv run forge ask "where is X handled"` → answer with `file:line` citations; `uv run pytest evals/test_citations_resolve.py` | **[x]** |
-| C4 | Short-term memory works | Network-free proof passes: `CACHE_MODE=replay uv run pytest tests/test_graph.py -k restart` → exit 0. The container-restart variant is scripted inside `scripts/clean_machine_test.sh` and runs when C9 does | **[~]** code proven, container variant pending C9 |
+| C4 | Short-term memory works | Network-free proof passes: `CACHE_MODE=replay uv run pytest tests/test_graph.py -k restart` → exit 0. The container-restart variant inside `scripts/clean_machine_test.sh` **also ran (2026-08-04)**: a session created before `docker compose restart api` still answered `/history` after it | **[x]** both halves |
 | C5 | Guardrails on input, output and tools | `uv run pytest evals/security -q` green, and `curl -s localhost:8000/v1/guardrails/events \| jq length` > 0 after a run | **[x]** |
 | C6 | External tools connected | `uv run forge tools` → **"FORGE tools — 10 operational"**; `tests/test_registry.py` invokes all seven knowledge tools and asserts the two path-taking ones refuse an escape. **MCP transport is NOT built** (cut-list item 1) — so the "et via MCP" half is unmet; O2 still needs settling | **[~]** Tools half done |
 | C7 | Working user interface | The 4-minute §15.6 script run end to end in the browser, screen-recorded to `docs/demo.mp4` | [ ] |
 | C8 | API exposed | `curl -s localhost:8000/openapi.json \| jq '.paths \| keys'` shows all §11 routes; `scripts/sse_smoke.sh` streams events | **[x]** |
-| C9 | Containerised deployment | `scripts/clean_machine_test.sh` written and it already found five defects (all fixed). **The run is pending**: this build sandbox's Docker daemon cannot reach the registry, so `node:22-slim` will not pull. Run it on a machine with egress | [ ] |
+| C9 | Containerised deployment | `API_PORT=18000 scripts/clean_machine_test.sh` → **exit 0, "C9 PASS" (2026-08-04)**. A depth-1 clone of `84d1a9f` with no `.env`, no `data/qdrant/` and no `node_modules`: `docker compose up --build` alone gave a healthy API, the SPA on the same origin, an index built inside the container, and a session that survived a restart | **[x]** |
 | C10 | Deliverables complete | L1 cahier · L2 repo+README+requirements.txt+ADRs+evaluation.md+limitations.md · L3 two notebooks · L4 Dockerfiles+compose · L5 live demo + video · L6 12 slides | [ ] |
 
 ---
@@ -302,10 +302,11 @@ three new open items are in STATE.md as **O6** (`/v1/ask` skips the §8.2 inject
 
 ## Sprint 5 — Integration and defense (D14–D15)
 
-### [ ] D14 · Containerisation, benchmark, documentation
+### [ ] D14 · Containerisation, benchmark, documentation — **clean-machine half of the DoD met (2026-08-04)**; the benchmark half is the last task open
 
 - [x] Multi-stage Dockerfile (node stage builds `web/`, api stage serves it), git + ripgrep installed, entrypoint bootstraps the target repo, `API_PORT` overridable
-- [x] **`scripts/clean_machine_test.sh`** written — clones HEAD into an empty dir, `cp .env.example .env`, `docker compose up`, then probes health/openapi/SPA/index/search and restarts the container to prove C4. **It already revealed five defects, all fixed** (no `git` in the image, no `ripgrep`, no target repo in a clone, `.env.example` defaulting to `CACHE_MODE=auto`, no UI served at all). **The run itself is still pending** — this sandbox's Docker daemon has no registry egress, so `node:22-slim` cannot be pulled (**C9 open**)
+- [x] **`scripts/clean_machine_test.sh`** written — clones HEAD into an empty dir, `cp .env.example .env`, `docker compose up`, then probes health/openapi/SPA/index/search and restarts the container to prove C4. **It already revealed five defects, all fixed** (no `git` in the image, no `ripgrep`, no target repo in a clone, `.env.example` defaulting to `CACHE_MODE=auto`, no UI served at all)
+- [x] **The run itself — `API_PORT=18000 scripts/clean_machine_test.sh` → exit 0, C9 PASS (2026-08-04)**, on a clone of `84d1a9f` with no `.env`, no index and no `node_modules`. `health {"cache_mode":"replay","offline":true}` · openapi served · SPA served from the same origin · index built **inside** the container (3 hits) · session resumed after `restart api` (**C4's container half**). The earlier blocker was environmental: the Docker daemon now has registry egress
 - [ ] Run `swe_mini` (4 bugs): resolution rate, mean repair iterations, cost and wall clock per task, regression rate → `docs/evaluation.md` — needs quota
 - [x] README rewritten: one-command quickstart, "use it on your own project", API table, honest "what does not work yet". Stale status claims deleted
 - [x] `make requirements` → `requirements.txt` (383 lines)
