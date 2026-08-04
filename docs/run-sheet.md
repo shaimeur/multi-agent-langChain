@@ -82,6 +82,30 @@ around it survived, so the task still completes.*
 
 ---
 
+## The spare beat — free, offline, re-runnable in front of them
+
+If a beat dies, or the jury asks for evidence rather than a demo, run this. It spends **no
+quota**, needs **no network**, and finishes in ~25 seconds:
+
+```bash
+QDRANT_URL= CACHE_MODE=replay uv run python evals/run_swe_mini.py
+```
+
+→ `4/4 repaired`, 0 regressions. Verified again today, exit 0.
+
+Say the caveat before they ask it: *the harness hands the agent the correct file, so this
+scores the repair loop, not retrieval end to end.* It is in `evaluation.md` under "three
+things this number does not say" — owning it is worth more than the 4/4.
+
+The security suite is the same kind of asset — instant, offline, quotable:
+
+```bash
+CACHE_MODE=replay uv run pytest evals/security -q     # → 32/32 attacks mitigated
+uv run python scripts/mcp_smoke.py                    # → C6/MCP PASS, if C6 comes up
+```
+
+---
+
 ## Recovery — if a beat dies mid-take
 
 | Symptom | Do this, keep talking |

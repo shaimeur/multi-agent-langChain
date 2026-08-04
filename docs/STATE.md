@@ -25,22 +25,23 @@ Branch       : main
       movement on every metric**, +11.8 % tokens — its 42 questions all name the symbol they want, so
       there is no hop to bridge. Tables in `limitations.md` §8 and `evaluation.md`
 - [x] **The offline demo was dead on a fresh clone, and is fixed (D15)** — see *Do not redo*
-- [x] Verified on the final tree, every one exit 0: `CACHE_MODE=replay uv run pytest` → **396 passed,
+- [x] Verified on the frozen tree, every one exit 0: `CACHE_MODE=replay uv run pytest` → **396 passed,
       6 skipped** · `evals/security` → **32/32 mitigated** · `evals/test_citations_resolve.py` ·
-      `scripts/clean_machine_test.sh` (**C9 PASS**, with the new `mcp` dep in the image) ·
-      `scripts/sse_smoke.sh` · `scripts/mcp_smoke.py` · `scripts/stage_demo.sh warm` ·
-      `npm run build` · `make lint`
+      `scripts/clean_machine_test.sh` (**C9 PASS**, run twice) · `scripts/sse_smoke.sh` ·
+      `scripts/mcp_smoke.py` · `scripts/stage_demo.sh warm` · `npm run build` · `make lint` ·
+      **`run_swe_mini.py` in replay → 4/4 repaired, offline, 25 s, zero quota** (a spare demo beat)
 - [x] **§15.6 in the browser (2026-08-03)** — live API + real model + docker sandbox: index →
       citations → bug report → timeline (6 agents) → plan gate → test author RED → patch gate + diff
       → apply → sandbox → reviewer `revise` → **the repair loop produced a better patch** ·
       **the guardrail fired visibly**. 8 of 9 beats; the 9th died on a quota 429, not on a defect
 
-## In progress
+## In progress — everything left is human
 - **C7 and C10 — the video, and nothing else.** The §15.6 run is already proven in a browser; what
-  is missing is the *recording*. `scripts/stage_demo.sh warm`, then `plant` at the security beat.
-  Human-only. **Next action.**
-- Then: three stopwatch rehearsals · say the four jury answers out loud · re-run
-  `clean_machine_test.sh` on the morning of D15 · freeze at noon.
+  is missing is the *recording*. Follow **`docs/run-sheet.md`** — every beat, the exact question
+  wordings that have fixtures, and a recovery column. **Next action.**
+- Then: three stopwatch rehearsals · say the eight jury answers out loud (`slides.md`, two annexes) ·
+  re-run `clean_machine_test.sh` the morning of the defence.
+- **Frozen at tag `d15-freeze`.** Anything after it is a deliberate un-freeze, not a tidy-up.
 
 ## Blocked / open decisions
 - **Your `.env` still pins `GEMINI_REASONER_MODEL=gemini-3.5-flash`** (a hook blocks me from editing
@@ -76,5 +77,4 @@ Branch       : main
 ## Notes for the next session
 - Real runs: `QDRANT_URL= CACHE_MODE=auto SANDBOX_BACKEND=docker`. `make api`;
   `cd web && npm run dev` proxies `/v1` → :8000. Commits OMIT the Claude trailer.
-- 15 stale worktrees under `data/workspaces/` from past runs. Harmless; remove them and
-  `git -C data/target worktree prune` if you want a tidy tree on camera.
+- 15 stale worktrees under `data/workspaces/`; harmless, `git -C data/target worktree prune` tidies.

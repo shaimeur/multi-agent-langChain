@@ -327,11 +327,11 @@ of them needs a camera. Boxes added rather than work done off-plan (see risk: sc
 - [x] **The offline demo was broken and is fixed.** All 37 grounded-answer fixtures are keyed on `gemini-flash-latest` while `config.py` and `.env.example` shipped `gemini-3.5-flash` — the model id is part of the cache key, so `CACHE_MODE=replay forge ask` raised FixtureMiss on a fresh clone. A never-cut item, dead, and invisible to both a green suite and the C9 run because neither drives a completion. `tests/test_llm_cache.py` now asserts the agreement
 - [x] 12 slides per §15.5 drafted in `docs/slides.md`, with the four certain jury questions answered in an annexe. Slide 6 carries the real ablation numbers
 - [x] Pre-warmed demo state — `scripts/stage_demo.sh {warm|plant|clean|status}`: `--full` re-index, offline replay verified, and the poisoned comment staged by command rather than typed live. `warm` → **exit 0**
-- [x] Re-run the clean-machine test on the final tree — `API_PORT=18000 scripts/clean_machine_test.sh` → **exit 0, "C9 PASS"**, with the new `mcp` dependency in the image. Run it *again* on the morning of D15 (risk register: Docker breaking overnight)
+- [x] Re-run the clean-machine test on the final tree — `API_PORT=18000 scripts/clean_machine_test.sh` → **exit 0, "C9 PASS"** (run twice on D15, the second time on the frozen tree). Run it again the morning of the defence — risk register: Docker breaking overnight
 - [ ] **Record the video of a successful run.** Non-negotiable, and the only thing standing between C7/C10 and closed. Do this before rehearsing, not after — **human**
 - [ ] Rehearse the 4-minute script three times end to end, stopwatch in hand — **human**
-- [ ] Prepare the four certain jury questions: why multi-agent over one agent with tools · how do you know it does not hallucinate · what if the model writes malicious code · what does a request cost — drafted in the `slides.md` annexe, needs saying out loud
-- [ ] **Code freeze at noon.** The afternoon is rehearsal only
+- [x] The four certain jury questions — answered in the `slides.md` annexe, **plus a second annexe** for the four follow-ups today made likely: the `swe_mini` 4/4 trap, why two features ship disabled, what 396 green tests cannot see, and "what is the weakest part". The cost answer now separates the *measured* number (11 calls / 20 613 tokens, `swe_mini`) from the design-time *estimate* (~29 / ~300k, `descope-v1.md`) instead of quoting the estimate as fact. Still needs saying out loud — **human**
+- [x] **Code freeze** — tag `d15-freeze` on the verified tree. Anything after it is a deliberate un-freeze, not a tidy-up
 
 **DoD: three clean rehearsals, a recorded fallback video, and a frozen tree.**
 Not met — the tree is ready and verified; the three remaining boxes are all human.

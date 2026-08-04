@@ -256,7 +256,47 @@ non-root, `cap_drop=ALL`, plafonds mémoire/CPU/PID. Suite adverse 32/32. Et l'E
 pas sur le disque : il rend des edits qu'un nœud séparé applique, après approbation humaine.
 
 **« Combien coûte une requête ? »**
-Une exécution complète ≈ 29 appels LLM / ~300k tokens d'entrée. L'onglet coûts rapporte
-tours, appels, tokens et latence par session. **Je ne convertis pas en euros** : rien dans
-le backend ne tarifie un fournisseur, et un chiffre inventé sur une slide de résultats
-serait pire que pas de chiffre.
+Deux chiffres, et je distingue lequel est mesuré.
+**Mesuré** (`swe_mini`, 04/08) : 11 appels et 20 613 tokens pour 4 réparations, soit
+**2,75 appels et ~5 150 tokens par tâche**, 20 s chacune.
+**Estimé** à la conception (`descope-v1.md`) : ~29 appels / ~300k tokens pour une exécution
+`change_request` complète — plus haut parce qu'elle inclut la récupération et les itérations
+de réparation, que le banc contourne. L'onglet coûts rapporte tours, appels, tokens et
+latence par session.
+**Je ne convertis pas en euros** : rien dans le backend ne tarifie un fournisseur, et un
+chiffre inventé sur une slide de résultats serait pire que pas de chiffre.
+
+---
+
+## Annexe 2 — les quatre suivantes, presque aussi certaines
+
+**« Votre `swe_mini` dit 4/4. C'est le système entier ? »** — *La question piège, et elle
+est dans mon propre rapport.* **Non.** Le harnais construit le `ContextPack` directement
+depuis le fichier fauté : il **donne** le bon fichier à l'agent. Le 4/4 mesure la boucle
+planner→editor→sandbox→reviewer *à récupération correcte*, pas le système de bout en bout.
+Deuxième réserve : 1,0 itération moyenne signifie que **la boucle de réparation n'a jamais
+itéré** sur ce banc — la preuve qu'elle fonctionne est la session navigateur du 03/08, où le
+reviewer a renvoyé `revise` et le second patch était meilleur. C'est écrit dans
+`evaluation.md` avant qu'on me le demande.
+
+**« Vous avez construit le reranker et l'expansion d'appels, puis vous les livrez
+désactivés. Pourquoi les avoir construits ? »** — Parce que le §13 exige que le choix soit
+**arbitré par des chiffres**, et qu'on ne peut pas mesurer ce qu'on n'a pas construit. Le
+reranker : p95 de 14 ms → 2589 ms *et* nDCG en baisse (0,596 → 0,547). L'expansion d'appels :
+**0,000 sur toutes les métriques** pour +11,8 % de jetons. Le second résultat est plus
+intéressant que le premier — c'est un diagnostic du **jeu de test**, dont les 42 questions
+nomment déjà le symbole cherché. La vraie suite n'est pas du code, c'est un second golden set.
+
+**« Vos 396 tests sont verts. Qu'est-ce qu'ils ne voient pas ? »** — J'ai un exemple daté
+d'aujourd'hui. Les 37 réponses enregistrées sont indexées sous `gemini-flash-latest`, la
+configuration livrée disait `gemini-3.5-flash` ; l'identifiant du modèle fait partie de la
+clé de cache, donc la démo hors-ligne était **morte sur un clone neuf**. Ni la suite verte ni
+le test machine vierge ne pouvaient le voir : **aucun des deux n'appelle réellement un
+modèle**. C'est la limite structurelle d'une suite hors-ligne, et c'est pourquoi cinq autres
+défauts n'ont été trouvés qu'en *pilotant l'interface*. Un test verrouille désormais celui-là.
+
+**« Quelle est la partie la plus faible ? »** — La récupération, et je peux le chiffrer.
+Recall@10 = 0,905 sur des questions qui *nomment* leur cible ; sur SM-01, où le rapport décrit
+un *symptôme*, le site du correctif est au rang 28 — hors du top-8 utilisé en production.
+Tout le reste du système est vérifié par exécution (code de sortie de pytest, citations
+revérifiées en code) ; la récupération est la seule étape dont la qualité reste statistique.
