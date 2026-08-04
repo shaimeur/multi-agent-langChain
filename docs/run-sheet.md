@@ -21,7 +21,7 @@ docker compose up --build          # → http://localhost:8000
 #    uses. The container has its OWN Qdrant, in the `qdrant-storage` volume, and step 2
 #    does not touch it. On this machine that volume still held an index of FORGE's own
 #    source from an earlier session — so the browser demo cited src/forge/... instead of
-#    sqlparse. Force a FULL rebuild inside the container and check the count:
+#    sqlparse. Click ⟳ Rebuild index in the UI (it does a FULL rebuild since D15b), or:
 curl -s -X POST localhost:8000/v1/index -H 'content-type: application/json' \
      -d '{"path":"data/target","incremental":false}'
 sleep 120 && curl -s localhost:6333/collections/code | grep -o '"points_count":[0-9]*'
@@ -31,11 +31,16 @@ sleep 120 && curl -s localhost:6333/collections/code | grep -o '"points_count":[
 If step 2 fails it tells you which of the two causes it is. Do not start recording until it
 prints `ready` **and** step 4 says 617.
 
-> **Why the `Index repo` button will not save you.** It calls `/v1/index` with
-> `incremental: true`, and incremental means "index what `git diff` says changed". The
-> target repo's HEAD has not moved, so the diff is empty and the button is a silent no-op —
-> it returns `202 accepted` and does nothing. The clean-machine test cannot catch this
-> because it runs under a fresh compose project with empty volumes. Use the curl above.
+> **The button used to be the trap.** Before D15b it sent `incremental: true` — "index
+> what `git diff` says changed" — so on an unchanged HEAD it returned `202 accepted` and
+> did nothing at all. It now rebuilds properly. The clean-machine test never caught it,
+> because that runs under a fresh compose project with empty volumes.
+
+> ⚠️ **The new footgun, and it is right next to the demo.** The sidebar has a target
+> repository picker. Switching does *not* touch the index — but selecting a different repo
+> and then clicking **Rebuild index** replaces the sqlparse index with that repo's, and the
+> replay fixtures go with it. If you demo the picker, switch **back to `target` before
+> rebuilding anything**. `scripts/stage_demo.sh warm` puts it right either way.
 
 ---
 
@@ -95,6 +100,17 @@ Ask any question that hits `lexer.py`. The **guardrail panel opens by itself**:
 around it survived, so the task still completes.*
 
 **6 · Cost panel** — turns, calls, tokens, guardrail events, latency.
+
+**Optional 7 · the target picker** (D15b, and a good security answer). Open the sidebar
+dropdown, switch to another repository, point at the banner: *the index is still the old
+one — rebuild it.* Then say the part that matters:
+
+> *"It is a select, not a text box. The server enumerates what may be chosen and re-checks
+> the value it gets back. That is deliberate: the target repo is the confinement root for
+> the file-reading tools, so a free-text path here would let the browser choose what the
+> sandbox may read."*
+
+Then **switch back to `target`** before touching Rebuild.
 
 ---
 
