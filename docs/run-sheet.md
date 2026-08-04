@@ -1,0 +1,104 @@
+# Run sheet — the 4-minute demo
+
+One page, for the second screen. Beats are §15.6 / slide 10. Every command is copy-paste.
+
+---
+
+## T-30 min · pre-flight (do this once, before recording)
+
+```bash
+# 1. THE ONE-LINE BLOCKER — without it every offline `forge ask` raises FixtureMiss.
+#    The recorded answers are keyed on the model id, and .env pins the wrong one.
+sed -i 's/^GEMINI_REASONER_MODEL=.*/GEMINI_REASONER_MODEL=gemini-flash-latest/' .env
+
+# 2. Pre-flight: full re-index + prove offline replay. Must print "ready".
+scripts/stage_demo.sh warm
+
+# 3. The stack, the way the examiner will run it.
+docker compose up --build          # → http://localhost:8000
+```
+
+If step 2 fails it tells you which of the two causes it is. Do not start recording until it
+prints `ready`.
+
+---
+
+## Which mode to record in
+
+| Beat | Live model | `CACHE_MODE=replay` |
+|---|---|---|
+| 1–2 · index + grounded question | ✅ | ✅ **proven** — use the exact wording below |
+| 3–5 · bug report → plan → tests → patch | ✅ **proven 03/08 in the browser** | ⚠️ **not proven end to end** |
+| 5 · poisoned comment + guardrail | ✅ | ✅ deterministic, no model needed |
+| 6 · cost panel | ✅ | ✅ |
+
+**Record with the live model.** That is the path proven in a browser on 03/08, and the
+recording *is* the fallback — it does not itself need to be offline. Budget it: the free
+tier is **≈20 requests/day per model id**, one full run is ~11, so you get **one clean take
+plus one retry**. Rehearse the clicks with the stack up *before* you start spending calls.
+
+`CACHE_MODE=replay` is what you show the jury live tomorrow if the wifi dies — and for the
+Q&A beat it is proven. Say that out loud; it is a stronger claim than pretending the whole
+run is offline.
+
+---
+
+## The beats
+
+**1 · Index** — `Index repo` button, or `uv run forge index data/target --full`.
+Say: *617 chunks, 59 files, AST boundaries — not 500-character windows.*
+
+**2 · Grounded question** — this exact wording (it has a committed fixture):
+
+> `How does the lexer tokenize SQL statements?`
+
+Point at the badge: **● grounded**, and the citation table. Say: *the citations are verified
+in code against what was actually retrieved — the model's word is never the authority.*
+
+**3 · Bug report** — switch the toggle to **Change**, paste:
+
+> `Quoted identifiers come back wrong: parsing 'select * from "my table"' and asking the identifier for its real name returns the name with a trailing double quote still attached. It should be just: my table`
+
+Point at the **agent timeline** as it fills. Say: *six agents, and this is the visual proof
+it is not one agent in a loop.*
+
+**4 · Plan gate** → approve. Then the tester writes the **failing** test first — point at
+`exit=1`. Say: *red before green, so a patch that changes nothing cannot pass.*
+Then the **patch gate** with the coloured diff → approve. Say: *nothing has touched disk
+until this click.*
+
+**5 · The poisoned comment** — in a second terminal:
+
+```bash
+scripts/stage_demo.sh plant
+uv run forge index data/target --full     # make it retrievable
+```
+
+Ask any question that hits `lexer.py`. The **guardrail panel opens by itself**:
+`[REDACTED] injection.override`. Say: *neutralised before the planner saw it, and the code
+around it survived, so the task still completes.*
+
+**6 · Cost panel** — turns, calls, tokens, guardrail events, latency.
+
+---
+
+## Recovery — if a beat dies mid-take
+
+| Symptom | Do this, keep talking |
+|---|---|
+| `429` quota mid-run | Say *"that is the free tier, ~20 requests a day — it is in the risk register"*, switch to the recorded video |
+| `FixtureMiss` | You are in replay with a wording that was never recorded. Switch to `CACHE_MODE=auto`, or use the exact question above |
+| Sandbox unavailable | It degrades to the documented `subprocess` fallback; every report records which ran. `limitations.md` §1 |
+| Docker broken | **Do not debug it.** Play the video. This is the D15 rule |
+
+---
+
+## T-0 · after the recording
+
+```bash
+scripts/stage_demo.sh clean        # un-plant the comment, restore the pinned tree
+git -C data/target status --short  # must be empty
+```
+
+Then: three stopwatch rehearsals, and say the four jury answers out loud — they are drafted
+in the `docs/slides.md` annexe, but reading them is not the same as having said them.
