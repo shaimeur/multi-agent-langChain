@@ -139,10 +139,17 @@ repo ──▶ walker ──▶ chunkers (tree-sitter AST) ──▶ embed ─�
   costing more latency than it returned in nDCG. It stays in the eval harness so the
   claim is measured rather than asserted.
 
-**The known limit (O7).** Retrieval is text similarity. It cannot follow a call
-graph, so a bug report describing a symptom at `get_real_name` will not surface
-`utils.remove_quotes` two hops down — that fix site was absent from the top 35 chunks,
-and ranked 2nd only once the report *named* it.
+**The known limit (O7), and the switch for it.** Retrieval is text similarity: it does
+not follow a call graph, so a bug report describing a symptom at `get_real_name` does
+not surface `utils.remove_quotes` — the fix site sits at rank 28, far outside the live
+top-8, and ranks 2nd only once the report *names* it.
+
+`rag/callgraph.py` walks one hop: tree-sitter extracts what a retrieved chunk calls and
+each name resolves against the indexed chunks, with the callee placed directly behind its
+caller so it survives the token cap. `RETRIEVAL_EXPAND_CALLS` turns it on, and it is off,
+because the golden set measures **no gain** from it for 11.8 % more tokens — its 42
+questions all name the symbol they want, so there is no hop to bridge. `limitations.md` §8
+has the table and the argument.
 
 ---
 

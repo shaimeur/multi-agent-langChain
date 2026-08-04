@@ -59,10 +59,10 @@ after running it.
 | C4 | Short-term memory works | Network-free proof passes: `CACHE_MODE=replay uv run pytest tests/test_graph.py -k restart` → exit 0. The container-restart variant inside `scripts/clean_machine_test.sh` **also ran (2026-08-04)**: a session created before `docker compose restart api` still answered `/history` after it | **[x]** both halves |
 | C5 | Guardrails on input, output and tools | `uv run pytest evals/security -q` green, and `curl -s localhost:8000/v1/guardrails/events \| jq length` > 0 after a run | **[x]** |
 | C6 | External tools connected | **Both halves (2026-08-04).** Tools: `uv run forge tools` → "FORGE tools — 10 operational"; `tests/test_registry.py` invokes all seven knowledge tools and asserts the two path-taking ones refuse an escape. MCP: `uv run python scripts/mcp_smoke.py` → **exit 0, "C6/MCP PASS"** — a *separate process* running `forge mcp`, real JSON-RPC on stdio, tools discovered with usable schemas, a call returning real repo content, and a path escape refused over MCP too. Plus `tests/test_mcp.py` (9). **O2 settled by building it** | **[x]** |
-| C7 | Working user interface | The 4-minute §15.6 script run end to end in the browser, screen-recorded to `docs/demo.mp4` | [ ] |
+| C7 | Working user interface | The 4-minute §15.6 script run end to end in the browser, screen-recorded to `docs/demo.mp4`. **The run itself is done** — 8 of 9 beats seen on screen 2026-08-03, the 9th (beat 6's green half) lost to a quota 429 mid-repair. What is missing is the *recording*, not the capability | [ ] **needs the video** |
 | C8 | API exposed | `curl -s localhost:8000/openapi.json \| jq '.paths \| keys'` shows all §11 routes; `scripts/sse_smoke.sh` streams events | **[x]** |
 | C9 | Containerised deployment | `API_PORT=18000 scripts/clean_machine_test.sh` → **exit 0, "C9 PASS" (2026-08-04)**. A depth-1 clone of `84d1a9f` with no `.env`, no `data/qdrant/` and no `node_modules`: `docker compose up --build` alone gave a healthy API, the SPA on the same origin, an index built inside the container, and a session that survived a restart | **[x]** |
-| C10 | Deliverables complete | L1 cahier · L2 repo+README+requirements.txt+ADRs+evaluation.md+limitations.md · L3 two notebooks · L4 Dockerfiles+compose · L5 live demo + video · L6 12 slides | [ ] |
+| C10 | Deliverables complete | L1 ✓ cahier · L2 ✓ repo+README+requirements.txt+ADRs+evaluation.md+limitations.md · L3 ✓ two notebooks · L4 ✓ Dockerfiles+compose · **L5 live demo + video — the video is the one gap** · L6 ✓ 12 slides | [ ] **needs the video** |
 
 ---
 
@@ -316,17 +316,25 @@ three new open items are in STATE.md as **O6** (`/v1/ask` skips the §8.2 inject
 recorded.** — **MET 2026-08-04.** `scripts/clean_machine_test.sh` → exit 0 "C9 PASS"; `swe_mini`
 → exit 0, 4/4, recorded in `docs/evaluation.md`. Both commands ran; both exit statuses observed.
 
-### [ ] D15 · Slides, rehearsal, freeze
+### [ ] D15 · Carried gates, slides, rehearsal, freeze
 
+The three carried items were closed first, because each is a *graded* claim and none
+of them needs a camera. Boxes added rather than work done off-plan (see risk: scope drift).
+
+- [x] **C6's second half — the MCP server.** `src/forge/mcp/` reflects `build_toolset()`; `forge mcp` serves it on stdio; `scripts/mcp_smoke.py` spawns the real console script and speaks JSON-RPC to it → **exit 0, "C6/MCP PASS"**. `tests/test_mcp.py` (9). **O2 settled by building it**, so cut-list item 1 goes untaken
+- [x] **O6 — the ask path now runs the §8.2 injection scan.** `scan_chunks` moved to the seam it belongs at inside `answer_question`, so `POST /v1/ask` and `forge ask` are defended like the change path. Proven by disabling it and watching the new test fail on the injected instruction reaching the prompt. A clean chunk returns as the *same object*, so no replay fixture moved
+- [x] **O7 — the call hop is built and measured**, `rag/callgraph.py` + `pack_context(expand_calls=...)`, shipped **off** (`RETRIEVAL_EXPAND_CALLS=false`). On SM-01 it pulls `remove_quotes` into the pack for ~390 tokens; on the golden set it moves **no metric at all** for +11.8 % tokens — a diagnosis of the golden set, whose 42 questions all name the symbol they want. `limitations.md` §8 and `evaluation.md` carry the table
+- [x] **The offline demo was broken and is fixed.** All 37 grounded-answer fixtures are keyed on `gemini-flash-latest` while `config.py` and `.env.example` shipped `gemini-3.5-flash` — the model id is part of the cache key, so `CACHE_MODE=replay forge ask` raised FixtureMiss on a fresh clone. A never-cut item, dead, and invisible to both a green suite and the C9 run because neither drives a completion. `tests/test_llm_cache.py` now asserts the agreement
 - [x] 12 slides per §15.5 drafted in `docs/slides.md`, with the four certain jury questions answered in an annexe. Slide 6 carries the real ablation numbers
-- [ ] Pre-warmed demo state: target repo pre-indexed, caches warm, poisoned-comment file staged, `CACHE_MODE=replay` verified end to end with the network physically off
-- [ ] **Record the video of a successful run.** Non-negotiable. Do this before rehearsing, not after
-- [ ] Rehearse the 4-minute script three times end to end, stopwatch in hand
-- [ ] Prepare the four certain jury questions: why multi-agent over one agent with tools · how do you know it does not hallucinate · what if the model writes malicious code · what does a request cost
-- [ ] Re-run the clean-machine test on the morning of D15 (risk register: Docker breaking overnight)
+- [x] Pre-warmed demo state — `scripts/stage_demo.sh {warm|plant|clean|status}`: `--full` re-index, offline replay verified, and the poisoned comment staged by command rather than typed live. `warm` → **exit 0**
+- [x] Re-run the clean-machine test on the final tree — `API_PORT=18000 scripts/clean_machine_test.sh` → **exit 0, "C9 PASS"**, with the new `mcp` dependency in the image. Run it *again* on the morning of D15 (risk register: Docker breaking overnight)
+- [ ] **Record the video of a successful run.** Non-negotiable, and the only thing standing between C7/C10 and closed. Do this before rehearsing, not after — **human**
+- [ ] Rehearse the 4-minute script three times end to end, stopwatch in hand — **human**
+- [ ] Prepare the four certain jury questions: why multi-agent over one agent with tools · how do you know it does not hallucinate · what if the model writes malicious code · what does a request cost — drafted in the `slides.md` annexe, needs saying out loud
 - [ ] **Code freeze at noon.** The afternoon is rehearsal only
 
 **DoD: three clean rehearsals, a recorded fallback video, and a frozen tree.**
+Not met — the tree is ready and verified; the three remaining boxes are all human.
 
 ---
 

@@ -151,7 +151,10 @@ Trace réelle, reconstruite depuis le checkpoint (`notebooks/02_agent_traces.ipy
 Les `allowed` sont journalisés aussi : un log qui n'enregistre que les refus ne prouve
 pas qu'un contrôle a tourné.
 
-> Limite assumée (O6) : ce scan tourne sur le chemin *change*, pas sur `/v1/ask`.
+> Le scan tourne aux **deux** endroits où du texte tiers devient prompt : le nœud RETRIEVER
+> et `answer_question`. Il n'a longtemps tourné qu'au premier — `/v1/ask`, le bouton *Ask*
+> de l'interface, passait à côté (O6, corrigé au gel). Un chunk propre revient **identique**,
+> donc corriger cela n'a invalidé aucune fixture.
 
 ---
 
@@ -189,18 +192,26 @@ peut pas faire entrer un paquet.
 
 ## 11 · Résultats — et ce qui ne marche pas
 
-**Ce qui marche** : 373 tests verts hors-ligne · 5 portes d'acceptation fermées
-(C1, C3, C5, C6, C8) · `swe_mini --verify` 4/4 sain, réparation 3/4 · pipeline complet
-piloté dans un navigateur.
+**Ce qui marche** : 396 tests verts hors-ligne · **8 portes fermées** (C1–C6, C8, C9) ·
+`swe_mini` **4/4 réparés**, 0 régression, 1,0 itération · suite adverse **32/32** ·
+`docker compose up` sur clone vierge · pipeline complet piloté dans un navigateur.
 
 **Ce qui ne marche pas — mesuré, pas deviné :**
 
 | # | Limite | Preuve |
 |---|---|---|
-| O7 | La récupération ne franchit pas un saut d'appel | SM-01 : le site du correctif est **absent du top-35** quand le rapport décrit le *symptôme* ; 2ᵉ dès qu'il le *nomme* |
-| O6 | `/v1/ask` ne lance pas le scan §8.2 | `scan_chunks` n'est appelé qu'à un seul endroit |
+| O7 | Le saut d'appel : **construit, mesuré, livré désactivé** | SM-01 : le correctif est hors du top-8 ; un saut le ramène pour ~390 jetons. Sur le golden set : **0,000 sur toutes les métriques**, +11,8 % de jetons — ses 42 questions *nomment* déjà le symbole |
+| — | Le `swe_mini` 4/4 ne mesure pas la récupération | Le harnais **donne** le bon fichier à l'agent. Le chiffre porte sur la boucle de réparation, pas sur le système |
+| O5 | Injection niveau 2 (classifieur) non construite | Heuristiques + spotlighting seulement ; `limitations.md` §7 |
 | O8 | C'est l'UI qui route ask/change | `Route` n'a pas de membre `CHANGE` |
 | — | Quota gratuit ≈ 20 requêtes/jour/modèle | `429` en pleine réparation le 03/08 |
+
+> **Le dernier défaut trouvé, le jour du gel** : les 37 réponses enregistrées étaient
+> indexées sous `gemini-flash-latest`, la configuration livrée disait `gemini-3.5-flash`.
+> L'identifiant du modèle fait partie de la clé de cache — la démo hors-ligne était morte
+> sur un clone neuf, dépôt parfaitement propre. Ni la suite verte ni le test machine vierge
+> ne pouvaient le voir : aucun des deux n'appelle réellement un modèle. Corrigé, et un test
+> le verrouille désormais.
 
 > Cinq bugs n'ont été trouvés qu'en *pilotant l'interface*, pas par les tests. C'est en
 > soi un résultat : les tests couvrent les pièces, l'usage couvre l'assemblage.
@@ -213,9 +224,11 @@ piloté dans un navigateur.
   filtre par dépôt. C'est un choix de périmètre, pas un oubli.
 - **Python uniquement** — le chunker AST est tree-sitter Python (coupe assumée, J2).
 - **Mémoire long terme** — court terme seulement (checkpoint SQLite).
-- **Le saut d'appel (O7)** — la vraie suite technique : expansion par graphe d'appels.
-- **L'attaque non bloquée** — l'injection indirecte est neutralisée sur le chemin change ;
-  le chemin ask reste à couvrir (O6).
+- **Le saut d'appel (O7)** — construit et livré désactivé. La vraie suite n'est plus le code :
+  c'est **un second golden set** écrit dans la forme de SM-01, où le site du correctif n'est
+  jamais nommé. Le jeu actuel est structurellement incapable de mesurer la fonctionnalité.
+- **L'injection directe est signalée, pas bloquée** (déviation assumée du §13.4,
+  `limitations.md` §6) ; le niveau 2 par classifieur n'est pas construit (§7).
 
 **Ce que je referais autrement** : brancher l'interface plus tôt. Les cinq défauts trouvés
 le dernier jour étaient tous *inatteignables* tant que rien n'appelait ces routes.
