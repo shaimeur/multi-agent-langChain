@@ -65,8 +65,11 @@ make test                        # 383 tests, fully offline
 make sandbox-image               # optional: the hardened sandbox image (needs Docker)
 
 uv run forge index data/target --full        # ingest — 617 chunks from 59 files
-uv run forge search "how are SQL comments stripped"
-uv run forge ask "how does sqlparse split statements?"
+uv run forge search "how are SQL comments stripped"                    # no LLM, always works
+# Replays offline from the committed fixtures — no key needed. A *different* wording
+# retrieves a different pack, and the pack is part of the cache key, so it will ask
+# for a live model instead. Use CACHE_MODE=auto with a key to ask your own questions.
+uv run forge ask "How does the lexer tokenize SQL statements?"
 uv run forge tools                           # the ten callable tools (C6)
 uv run forge fix "quoted identifiers keep a trailing quote"
 ```

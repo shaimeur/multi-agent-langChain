@@ -75,7 +75,13 @@ def make_retriever_node(
         )
         if groups is None:
             groups = load_groups(client, collection)
-        pack = pack_context(hits, groups=groups, token_budget=token_budget, queries=[query])
+        pack = pack_context(
+            hits,
+            groups=groups,
+            token_budget=token_budget,
+            expand_calls=settings.retrieval_expand_calls,
+            queries=[query],
+        )
 
         # §8.2 — this is where third-party text enters the prompt, so this is where
         # the indirect-injection scan belongs. Every chunk is scanned and neutralised

@@ -99,6 +99,19 @@ def build_matrix(client) -> list[RetrievalConfig]:
             embedder_model=MINILM,
             tag="diagnostic",
         ),
+        # O7 / limitations.md §8. The row above is the shipped live configuration, so
+        # this one differs from it by exactly one knob — which is what makes the delta
+        # readable as the cost and benefit of the call hop and nothing else.
+        RetrievalConfig(
+            "  + one-hop call expansion",
+            "code",
+            "hybrid",
+            parent_expand=True,
+            expand_calls=True,
+            filters=_IMPL,
+            embedder_model=MINILM,
+            tag="diagnostic",
+        ),
     ]
 
     # --- bge: the embedder decision, same configs under BGE-M3 ---

@@ -32,8 +32,9 @@ from forge.evaluation.metrics import (
 )
 from forge.models import Chunk, SearchHit
 from forge.rag import store
+from forge.rag.callgraph import build_symbol_index, resolve_callees
 from forge.rag.embed import Embedder
-from forge.rag.pack import expand_hits, group_key, load_groups
+from forge.rag.pack import expand_hits, expand_hits_with_calls, group_key, load_groups
 from forge.rag.rerank import Reranker
 from forge.rag.retrieve import Filters, SearchMode, hybrid_search, load_encoder
 from forge.rag.sparse import BM25Encoder
@@ -90,6 +91,9 @@ class RetrievalConfig:
     mode: SearchMode = "hybrid"
     rerank: bool = False
     parent_expand: bool = False
+    expand_calls: bool = False
+    """O7 — add the definition of what each matched chunk calls, one hop out. Scored
+    like ``parent_expand``: what the pack contains at rank k, not extra ranking slots."""
     embedder_model: str = ""
     filters: Filters = field(default_factory=Filters)
     tag: str = "canonical"
@@ -160,6 +164,7 @@ def evaluate_config(
     encoder = encoder or load_encoder(settings, cfg.collection)
     if cfg.parent_expand and groups is None:
         groups = load_groups(client, cfg.collection)
+    symbol_index = build_symbol_index(groups) if (cfg.expand_calls and groups) else None
 
     per_query: list[dict[str, Any]] = []
     latencies: list[float] = []
@@ -182,12 +187,21 @@ def evaluate_config(
 
         if cfg.parent_expand:
             groups_per_rank = [
-                [_span(c) for c in (groups.get(group_key(h.chunk)) or [h.chunk])] for h in hits
+                [
+                    _span(c)
+                    for c in (groups.get(group_key(h.chunk)) or [h.chunk])
+                    + (resolve_callees(h.chunk, symbol_index) if symbol_index else [])
+                ]
+                for h in hits
             ]
             for k in ks:
                 recall, hit = coverage_recall_hit(groups_per_rank, relevant, k)
                 record[f"recall@{k}"], record[f"hit@{k}"] = recall, hit
-            packed = expand_hits(hits[: max(ks)], groups or {})
+            packed = (
+                expand_hits_with_calls(hits[: max(ks)], groups or {})
+                if cfg.expand_calls
+                else expand_hits(hits[: max(ks)], groups or {})
+            )
         else:
             packed = [h.chunk for h in hits[: max(ks)]]
         record["chunks"] = float(len(packed))
@@ -204,6 +218,7 @@ def evaluate_config(
         mode=cfg.mode,
         rerank=cfg.rerank,
         parent_expand=cfg.parent_expand,
+        expand_calls=cfg.expand_calls,
         prefer_implementation=cfg.filters.prefer_implementation,
         p50_ms=percentile(latencies, 50) * 1000,
         p95_ms=percentile(latencies, 95) * 1000,

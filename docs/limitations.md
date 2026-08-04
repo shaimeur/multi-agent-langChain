@@ -190,10 +190,46 @@ This is why `docs/evaluation.md`'s 4/4 on `swe_mini` is scoped to the repair loo
 harness hands the agent the correct file rather than retrieving it. End to end, from a
 bug report alone, SM-01 fails before the loop starts.
 
-The fix is a one-hop call-graph expansion of the pack, and it is smaller than it sounds
-but is **not** free: ingestion records definition boundaries only (`ChunkKind.FUNCTION`,
-`METHOD`, `CLASS`, `MODULE`) and no call edges, so there is no graph to walk today. What
-does exist is `find_definitions`/`find_references` in `src/forge/tools/ast_symbols.py`,
-which already resolve a symbol to its definition. The missing piece is extracting the
-callees from a retrieved chunk's body and resolving each through that tool before the
-pack is capped. That is the first thing to build next, not a redesign.
+### The fix is built, measured, and shipped **off** (D15)
+
+`src/forge/rag/callgraph.py` does the hop: tree-sitter extracts the names a retrieved
+chunk calls — structurally, so a name in a comment is not a call — and each resolves
+against the indexed chunks. `pack_context(expand_calls=True)` places a callee directly
+behind its caller rather than at the end of the pack, which is what lets it survive the
+token cap. `RETRIEVAL_EXPAND_CALLS` is the switch.
+
+Two corrections to what is written above, both found by measuring rather than assuming:
+
+- `remove_quotes` is **not** absent from the top 35 — it sits at **rank 28**. The
+  operative number is the live `retrieval_top_k` of **8**, which it misses by a long way.
+- It is two hops from `get_real_name`, but only **one** from something retrieval already
+  finds: **rank 6** is `TokenList._get_first_name`, which calls it directly. That is why
+  a one-hop expansion is sufficient here and a two-hop walk is not needed.
+
+**What it does on SM-01:** `remove_quotes` enters the pack, at position 35 of 37, for
+2 extra chunks and ~390 tokens (4854 → 5241, inside the 6000 budget).
+
+**What it does on the golden set — nothing.** Same knob, same 42 pairs, one row apart:
+
+| Config | R@5 | R@10 | P@5 | MRR | nDCG@10 | chunks | tokens | p95 |
+|---|---|---|---|---|---|---|---|---|
+| prefer-impl + parent exp. (shipped) | 0.786 | 0.905 | 0.233 | 0.593 | 0.652 | 34.5 | 6676 | 24.0 ms |
+| + one-hop call expansion | 0.786 | 0.905 | 0.233 | 0.593 | 0.652 | 38.2 | 7464 | 21.9 ms |
+| **delta** | **0.000** | **0.000** | **0.000** | **0.000** | **0.000** | +3.7 | **+11.8 %** | −2.1 ms |
+
+Zero movement on every metric, for 11.8 % more tokens per query. That is not a
+disappointing result, it is a **diagnosis of the golden set**: its 42 questions name the
+symbol they are looking for, so the hop has nothing to bridge. The corpus that can
+measure this feature does not exist yet — building it means writing questions in the
+SM-01 shape, where the fix site is deliberately unnamed.
+
+So it ships off, for the same reason the cross-encoder does (`descope-v1.md` §3) plus a
+blunter one: the pack is embedded in the prompt, and the prompt is the replay cache key.
+Turning it on re-records every fixture, which is a decision with a quota cost attached —
+not a default. `tests/test_callgraph.py` asserts the default, because a silent flip is a
+dead offline demo.
+
+**Still true:** `docs/evaluation.md`'s 4/4 on `swe_mini` remains scoped to the repair
+loop, because the benchmark still hands the agent the correct file. This feature makes
+the end-to-end path *possible* on SM-01; it has not been run end to end, and until it is,
+the honest claim is the one above and nothing more.

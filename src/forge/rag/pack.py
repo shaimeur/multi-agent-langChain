@@ -27,6 +27,7 @@ from qdrant_client import QdrantClient
 
 from forge.models import Chunk, ContextPack, SearchHit
 from forge.rag import store
+from forge.rag.callgraph import build_symbol_index, resolve_callees
 
 CHARS_PER_TOKEN = 4
 """Rough char→token ratio for budgeting. Deliberately dependency-free: a real
@@ -100,6 +101,42 @@ def expand_hits(hits: list[SearchHit], groups: dict[tuple[str, str], list[Chunk]
     return out
 
 
+def expand_hits_with_calls(
+    hits: list[SearchHit], groups: dict[tuple[str, str], list[Chunk]]
+) -> list[Chunk]:
+    """``expand_hits``, plus the definition of what each matched chunk calls (O7).
+
+    The same rank-ordered walk, with one hop added per hit: after a group is
+    emitted, the definitions the *matched* chunk calls follow it. Callees are taken
+    from the retrieved unit and not from its parent-expanded siblings — the whole
+    enclosing class calls dozens of things, and expanding all of them would bury the
+    evidence that actually matched under its own neighbourhood.
+
+    Placing a callee directly behind its caller rather than at the end is what makes
+    this survive the budget: appended last, the hop would be the first thing the cap
+    drops, which on SM-01 is exactly the chunk the hop exists to fetch.
+    """
+    index = build_symbol_index(groups)
+    seen_groups: set[tuple[str, str]] = set()
+    seen_ids: set[str] = set()
+    out: list[Chunk] = []
+
+    def emit(chunk: Chunk) -> None:
+        if chunk.chunk_id not in seen_ids:
+            seen_ids.add(chunk.chunk_id)
+            out.append(chunk)
+
+    for hit in hits:
+        key = group_key(hit.chunk)
+        if key not in seen_groups:
+            seen_groups.add(key)
+            for member in groups.get(key) or [hit.chunk]:
+                emit(member)
+        for callee in resolve_callees(hit.chunk, index):
+            emit(callee)
+    return out
+
+
 def pack_context(
     hits: list[SearchHit],
     *,
@@ -108,6 +145,7 @@ def pack_context(
     collection: str = store.CODE_COLLECTION,
     token_budget: int = DEFAULT_TOKEN_BUDGET,
     expand: bool = True,
+    expand_calls: bool = False,
     queries: list[str] | None = None,
 ) -> ContextPack:
     """Ranked hits → an expanded, budget-bounded ContextPack for generation.
@@ -117,13 +155,17 @@ def pack_context(
     generator reads the pack top-down and the best evidence should lead. The first
     chunk is always admitted, so a single oversized unit still produces a usable
     pack rather than an empty one.
+
+    ``expand_calls`` adds the one-hop callee expansion of `limitations.md` §8. It is
+    off unless a caller asks, and ``RETRIEVAL_EXPAND_CALLS`` is what the live path
+    reads — see `forge.rag.callgraph` for why it does not default to on.
     """
     if expand:
         if groups is None:
             if client is None:
                 raise ValueError("pack_context(expand=True) needs `groups` or a `client`")
             groups = load_groups(client, collection)
-        chunks = expand_hits(hits, groups)
+        chunks = expand_hits_with_calls(hits, groups) if expand_calls else expand_hits(hits, groups)
     else:
         chunks = [h.chunk for h in hits]
 

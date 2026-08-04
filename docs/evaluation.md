@@ -200,9 +200,31 @@ expansion are in place, each a bigger lever than the embedder swap. BGE-M3 stays
   parent-document expansion under a token budget. Best measured **Recall@10 = 0.905, nDCG@10 = 0.652**,
   up from the D3 exact-id baseline of 0.400.
 - **Reranker** — built and measured, shipped `RERANK_ENABLED=false`.
+- **One-hop call expansion** — built and measured on D15, shipped `RETRIEVAL_EXPAND_CALLS=false`.
 - Two levers are staged for D5: the live `forge ask` path adopts `prefer_implementation=True` when the
   Retriever node lands and the offline mistral fixture is re-recorded (today it is proven in the
   harness and defaulted in `config.py`, but not yet flipped under the committed demo fixture).
+
+### D15 — one-hop call expansion, and why it also ships disabled (O7)
+
+The §8 limitation of `limitations.md` was that retrieval cannot follow a call: SM-01's fix
+site, `utils.remove_quotes`, is never named by the bug report and never retrieved. The hop
+is now built (`rag/callgraph.py`) and measured against the same golden set, one knob apart
+from the shipped configuration — an added `diagnostic` row in `evals/run_ablation.py`.
+
+| Config | Recall@5 | Recall@10 | P@5 | MRR | nDCG@10 | chunks | tokens | p95 |
+|---|---|---|---|---|---|---|---|---|
+| AST + hybrid + prefer-impl + parent exp. | 0.786 | 0.905 | 0.233 | 0.593 | 0.652 | 34.5 | 6676 | 24.0 ms |
+| &nbsp;&nbsp;+ one-hop call expansion | 0.786 | 0.905 | 0.233 | 0.593 | 0.652 | 38.2 | 7464 | 21.9 ms |
+| **delta** | **±0** | **±0** | **±0** | **±0** | **±0** | +3.7 | **+11.8 %** | −2.1 ms |
+
+**Zero gain, 11.8 % more tokens** — so it ships off, on the same "arbitrated by numbers"
+standard the reranker was judged by. But the zero is a fact about the *golden set*, not
+about the feature: all 42 pairs name the symbol they want, so there is no hop to bridge.
+On SM-01, where the report deliberately names nothing useful, the same knob moves
+`remove_quotes` from **outside the top 8** into the pack for ~390 tokens. Measuring the
+feature properly needs a second golden set written in that shape, and that is now the
+honest next piece of retrieval work.
 
 ---
 

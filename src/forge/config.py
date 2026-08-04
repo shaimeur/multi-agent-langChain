@@ -80,7 +80,15 @@ class Settings(BaseSettings):
     # users"), and 2.0-flash-lite is 429-throttled. The 3.5 tier serves cleanly.
     # Verify in the AI Studio dashboard the week of the demo — this list churns.
     gemini_router_model: str = "gemini-3.5-flash-lite"
-    gemini_reasoner_model: str = "gemini-3.5-flash"
+    # The reasoner name is NOT free to change: it is part of the fixture cache key,
+    # so the recorded completions replay only under the name they were recorded with.
+    # Every grounded-answer fixture in data/fixtures/ was recorded against
+    # `gemini-flash-latest`, and shipping `gemini-3.5-flash` here made `CACHE_MODE=
+    # replay forge ask` raise FixtureMiss on a fresh clone — the offline demo, dead,
+    # with the repository looking perfectly clean. `tests/test_llm_cache.py` now
+    # asserts the agreement. Keeping the coder on a second id is deliberate: two
+    # model ids are two quota pools.
+    gemini_reasoner_model: str = "gemini-flash-latest"
     gemini_coder_model: str = "gemini-3.5-flash"
 
     groq_api_key: str = ""
@@ -121,6 +129,12 @@ class Settings(BaseSettings):
     # this took hybrid Recall@10 0.750 -> 0.869 for ~35 ms. Wired into the live
     # grounded-answer path at D5, when the offline forge-ask fixture is re-recorded.
     prefer_implementation: bool = True
+    # O7 / limitations.md §8: add the definitions a retrieved chunk *calls*, one hop.
+    # Built and measured, shipped off — the same posture as the reranker above and for
+    # a blunter reason: it changes the pack for every query, the pack is embedded in
+    # the prompt, and the prompt keys the replay fixtures that are the offline demo.
+    # Flipping it on is a re-record, so it is a decision with a cost, not a default.
+    retrieval_expand_calls: bool = False
 
     # --- workspace ------------------------------------------------------
     # The repository FORGE operates on. Every write is confined to a git
