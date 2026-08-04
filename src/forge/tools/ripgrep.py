@@ -10,6 +10,7 @@ sends bare identifiers straight here instead of paying an LLM to rewrite them.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -52,9 +53,17 @@ def ripgrep_search(
     wants. Results are capped at ``max_count`` because a common token can match
     thousands of lines and only the first screenful ever reaches a ranking.
     """
-    if _RG is None:
-        raise RuntimeError("ripgrep (rg) is not installed")
     repo = Path(repo)
+    if _RG is None:
+        return _python_search(
+            pattern,
+            repo,
+            fixed_string=fixed_string,
+            word=word,
+            ignore_case=ignore_case,
+            globs=globs,
+            max_count=max_count,
+        )
 
     cmd = [_RG, "--json", "--line-number", "--no-heading"]
     if fixed_string:
@@ -100,4 +109,47 @@ def ripgrep_search(
         )
         if len(hits) >= max_count:
             break
+    return hits
+
+
+def _python_search(
+    pattern: str,
+    repo: Path,
+    *,
+    fixed_string: bool,
+    word: bool,
+    ignore_case: bool,
+    globs: list[str] | None,
+    max_count: int,
+) -> list[RipgrepHit]:
+    flags = re.IGNORECASE if ignore_case else 0
+    expr = re.escape(pattern) if fixed_string else pattern
+    if word:
+        expr = rf"\b(?:{expr})\b"
+    matcher = re.compile(expr, flags)
+
+    hits: list[RipgrepHit] = []
+    seen: set[Path] = set()
+    patterns = globs or ["**/*"]
+    for glob in patterns:
+        for path in sorted(repo.glob(glob)):
+            if path in seen or not path.is_file() or ".git" in path.parts:
+                continue
+            seen.add(path)
+            try:
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                continue
+            for line_no, line in enumerate(lines, 1):
+                if not matcher.search(line):
+                    continue
+                hits.append(
+                    RipgrepHit(
+                        path=path.relative_to(repo).as_posix(),
+                        line=line_no,
+                        text=line.strip(),
+                    )
+                )
+                if len(hits) >= max_count:
+                    return hits
     return hits

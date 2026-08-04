@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from forge.api.main import app
+from forge.config import get_settings
 
 client = TestClient(app)
 
@@ -99,7 +102,7 @@ def test_ask_route_returns_a_grounded_answer(monkeypatch):
     assert body["citations"][0]["path"] == "sqlparse/engine/statement_splitter.py"
 
 
-def test_an_ask_turn_is_counted_against_its_session(monkeypatch):
+def test_an_ask_turn_is_counted_against_its_session(monkeypatch, tmp_path):
     """§15.6 ends on "le détail des coûts", and a panel of zeros reads as *free*.
 
     An ask spends a model call like any other turn. Nothing was recording it, so a
@@ -111,6 +114,12 @@ def test_an_ask_turn_is_counted_against_its_session(monkeypatch):
     monkeypatch.setattr(
         "forge.api.main.answer_question",
         lambda *a, **k: GroundedAnswer(question="q", answer="a", grounded=False),
+    )
+    settings = get_settings()
+    repo = Path(settings.target_repo)
+    monkeypatch.setattr(
+        "forge.api.main.get_settings",
+        lambda: settings.model_copy(update={"target_repo": repo, "workspace_root": tmp_path / "ws"}),
     )
     session_id = client.post("/v1/sessions", json={}).json()["session_id"]
 
