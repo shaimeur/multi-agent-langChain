@@ -16,7 +16,7 @@ Architecture: [`docs/architecture.md`](docs/architecture.md)
 ## Status
 
 Day 14 of 15. The full pipeline runs end to end in a browser: retrieval, planning, both human
-approval gates, sandboxed tests, review, and the repair loop. **383 tests green**, fully offline.
+approval gates, sandboxed tests, review, and the repair loop. **415 tests green**, fully offline.
 
 | Sprint | Days | Delivers | State |
 |---|---|---|---|
@@ -61,7 +61,7 @@ scripts/clean_machine_test.sh    # clones HEAD into an empty dir and brings it u
 ```bash
 make install
 cp .env.example .env
-make test                        # 383 tests, fully offline
+make test                        # 415 tests, fully offline
 make sandbox-image               # optional: the hardened sandbox image (needs Docker)
 
 uv run forge index data/target --full        # ingest — 617 chunks from 59 files
@@ -96,8 +96,12 @@ which one ran, and the gap is spelled out in [`docs/limitations.md`](docs/limita
 
 ## Using it on your own project
 
-FORGE targets **one repository per process**, set by `TARGET_REPO`. It is not switchable from the
-UI — multi-repo is declared future work (cahier §12).
+FORGE targets **one repository per process**, set by `TARGET_REPO`. Since D15b the UI can switch
+between repositories, but only ones the server itself offers: `REPO_ROOTS` lists the directories a
+picker may enumerate, and `POST /v1/target` accepts nothing outside that enumeration. That restraint
+is the point — `TARGET_REPO` is the confinement root for the file tools, so a free-text path field
+would let a browser choose what the sandbox may read. Simultaneous *multi*-repo remains out of scope
+(cahier §3.2): retrieval has one collection and no per-repo filter.
 
 ```bash
 TARGET_REPO=/abs/path/to/your/project        # in .env
@@ -145,7 +149,7 @@ never take part in a cache key.
 
 ## API
 
-`GET /docs` for the full OpenAPI. Twelve routes; the ones that matter:
+`GET /docs` for the full OpenAPI. Fourteen routes; the ones that matter:
 
 | Route | Purpose |
 |---|---|
@@ -153,6 +157,7 @@ never take part in a cache key.
 | `POST /v1/search` | hybrid retrieval, **no LLM** — always available |
 | `POST /v1/sessions` · `/{id}/messages` | create a session; stream a run over SSE |
 | `POST /v1/sessions/{id}/approve` | resume a run paused at a §5.5 gate |
+| `GET /v1/repos` · `POST /v1/target` | list the selectable repositories, and switch to one (allowlisted) |
 | `GET /v1/guardrails/events` | the §8.5 log, queryable by session, stage and action |
 | `GET /v1/metrics` | turns, LLM calls, tokens, latency, guardrail counts |
 

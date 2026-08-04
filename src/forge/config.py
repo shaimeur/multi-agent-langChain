@@ -142,6 +142,17 @@ class Settings(BaseSettings):
     target_repo: Path = PROJECT_ROOT / "data" / "target"
     workspace_root: Path = PROJECT_ROOT / "data" / "workspaces"
     checkpoint_db: Path = PROJECT_ROOT / "data" / "checkpoints.sqlite"
+    # D15b — the only directories under which the UI may select a target repository,
+    # os.pathsep-separated. Empty means "the parent of target_repo", which keeps the
+    # default reach to the one directory the deployment already exposes.
+    #
+    # This is a security boundary, not a convenience. `target_repo` is the confinement
+    # root for the read_file/list_files tools (tools/registry._root_for), so a browser
+    # that could set it to an arbitrary path would be choosing what the sandbox may
+    # read. §8.3 asserts there is no code path from an untrusted string to a
+    # permission; this list is what keeps that true — the browser selects from a
+    # server-side enumeration and never supplies a path that is used as given.
+    repo_roots: str = ""
 
     # --- sandbox (cahier 8.3) -------------------------------------------
     # These caps are quoted verbatim on the security slide and asserted in

@@ -46,3 +46,6 @@ data/*-index-manifest.json
 # every run. The curated numbers live in docs/evaluation.md and the charts are
 # baked into notebooks/01_rag_evaluation.ipynb.
 evals/results/
+
+# D15b — a throwaway second repo so the UI target picker has two options.
+data/demo-notes/

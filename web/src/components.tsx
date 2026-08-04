@@ -5,6 +5,7 @@ import type {
   CitationView,
   GuardrailEventView,
   PlanPayload,
+  RepoOption,
   SessionInfo,
   SessionMetrics,
 } from './api'
@@ -36,11 +37,14 @@ export function Sidebar(props: {
   sessions: SessionInfo[]
   activeId: string | null
   busy: boolean
+  repos: RepoOption[]
   onSelect: (id: string) => void
   onNew: () => void
   onDelete: (id: string) => void
   onIndex: () => void
+  onPickRepo: (path: string) => void
 }) {
+  const current = props.repos.find((r) => r.is_current)
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-slate-800 bg-[#0d1117]">
       <div className="flex items-center gap-2 px-4 py-4">
@@ -53,15 +57,46 @@ export function Sidebar(props: {
       >
         + New session
       </button>
+
+      {/* D15b — a *select*, never a text field. The server enumerates what may be
+          chosen and re-checks the value it gets back, because target_repo is the
+          confinement root for the file tools: a free-text path here would let the
+          browser choose what the sandbox may read (§8.3). */}
+      {props.repos.length > 0 && (
+        <div className="mx-3 mb-2">
+          <label
+            htmlFor="repo-picker"
+            className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500"
+          >
+            Target repository
+          </label>
+          <select
+            id="repo-picker"
+            value={current?.path ?? ''}
+            disabled={props.busy}
+            onChange={(e) => props.onPickRepo(e.target.value)}
+            className="w-full rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+          >
+            {props.repos.map((r) => (
+              <option key={r.path} value={r.path}>
+                {r.name}
+                {r.is_git ? '' : ' (no git — ask only)'}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* §15.6 opens on `forge index`. The demo runs pre-warmed, but the DoD is "no
-          terminal", so the browser has to be able to kick one off. 202 — fire and forget. */}
+          terminal", so the browser has to be able to kick one off. 202 — fire and forget.
+          Full rebuild, not incremental: see the note on api.startIndex. */}
       <button
         onClick={props.onIndex}
         disabled={props.busy}
-        title="Re-index the target repo (runs in the background)"
+        title="Rebuild the index for the target repo from scratch (runs in the background)"
         className="mx-3 mb-3 rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800/60 disabled:opacity-50"
       >
-        ⟳ Index repo
+        ⟳ Rebuild index
       </button>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {props.sessions.length === 0 && (

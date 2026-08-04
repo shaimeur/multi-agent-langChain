@@ -53,6 +53,7 @@ export default function App() {
   // supervisor has no CHANGE route, so the two cannot be inferred from one entry point —
   // see STATE.md "ask-vs-change routing" for the deviation this records.
   const [mode, setMode] = useState<'ask' | 'change'>('ask')
+  const [repos, setRepos] = useState<api.RepoOption[]>([])
 
   const tlId = useRef(0)
   const streamRef = useRef('')
@@ -66,9 +67,20 @@ export default function App() {
     }
   }, [])
 
+  const refreshRepos = useCallback(async () => {
+    try {
+      setRepos(await api.listRepos())
+    } catch {
+      // A deployment with no selectable roots is a valid configuration, not an error
+      // to shout about — the picker simply does not render.
+      setRepos([])
+    }
+  }, [])
+
   useEffect(() => {
     void refreshSessions()
-  }, [refreshSessions])
+    void refreshRepos()
+  }, [refreshSessions, refreshRepos])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
@@ -180,7 +192,26 @@ export default function App() {
   const reindex = async () => {
     try {
       const r = await api.startIndex()
-      setNotice(`indexing ${r.path} (${r.incremental ? 'incremental' : 'full'})…`)
+      setNotice(`rebuilding the index for ${r.path} — this runs in the background…`)
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  const pickRepo = async (path: string) => {
+    try {
+      const r = await api.setTarget(path)
+      await refreshRepos()
+      // Switching does not reindex, and saying nothing here is how someone ends up
+      // asking questions about the previous repository and believing the answers.
+      const stale = r.indexed
+        ? 'the existing index is for whatever was indexed last — rebuild it'
+        : 'nothing is indexed for it yet — rebuild the index'
+      const sessions =
+        r.active_sessions > 0
+          ? ` ${r.active_sessions} existing session(s) still hold worktrees from the previous repo.`
+          : ''
+      setNotice(`target repo → ${r.target_repo}; ${stale}.${sessions}`)
     } catch (e) {
       setError(String(e))
     }
@@ -242,6 +273,8 @@ export default function App() {
         onNew={newSession}
         onDelete={removeSession}
         onIndex={() => void reindex()}
+        repos={repos}
+        onPickRepo={(p) => void pickRepo(p)}
       />
 
       <main className="flex min-w-0 flex-1">

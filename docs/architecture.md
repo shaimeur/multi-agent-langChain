@@ -45,6 +45,7 @@ One Python package, `src/forge/`, plus a separate React build in `web/`.
 | `guardrails/` | the three defence layers and the queryable event log |
 | `tools/` | the ten externally-callable tools (C6) |
 | `mcp/` | the same ten, reflected over MCP — no capability of its own (C6) |
+| `api/repos.py` | which repositories the UI may select, and why that is a security question |
 | `api/` | the §11 HTTP surface, SSE streaming, session store |
 | `cli/` | `forge config | index | search | ask | tools | mcp | fix` |
 | `llm/` | provider construction and the fixture cache that makes runs replayable |

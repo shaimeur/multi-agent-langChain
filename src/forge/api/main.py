@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from forge.api.repos import NotSelectable, list_repos, resolve_selection
 from forge.api.sessions import SessionInfo, SessionMetrics, Timer, get_store
 from forge.api.streaming import StreamEvent, graph_events
 from forge.config import Settings, get_settings
@@ -433,6 +434,100 @@ def start_index(request: IndexRequest, background: BackgroundTasks) -> IndexAcce
 
     background.add_task(run_index)
     return IndexAccepted(status="accepted", path=target, incremental=request.incremental)
+
+
+# --- choosing the target repository (D15b, Tier 2) -------------------------
+
+
+class RepoOptionOut(BaseModel):
+    name: str
+    path: str
+    is_git: bool
+    is_current: bool
+
+
+class TargetRequest(BaseModel):
+    path: str
+    """Must equal an entry from ``GET /v1/repos``. Not a path the server will trust."""
+
+
+class TargetResponse(BaseModel):
+    target_repo: str
+    indexed: bool
+    """False means retrieval still holds the *previous* repository's chunks."""
+    active_sessions: int
+
+
+@app.get("/v1/repos", response_model=list[RepoOptionOut], tags=["ops"])
+def list_target_repos() -> list[RepoOptionOut]:
+    """The repositories the UI may select — enumerated server-side from ``REPO_ROOTS``.
+
+    This list *is* the permission. ``POST /v1/target`` accepts nothing that is not in
+    it, so what this route returns is the exact reach a browser has.
+    """
+    return [RepoOptionOut(**vars(option)) for option in list_repos(get_settings())]
+
+
+@app.post("/v1/target", response_model=TargetResponse, tags=["ops"])
+def set_target_repo(request: TargetRequest) -> TargetResponse:
+    """Point FORGE at another allowlisted repository, at runtime.
+
+    ``target_repo`` is the confinement root for the file tools, so this route is a
+    security boundary and is written as one: the path is re-validated against a fresh
+    enumeration (never a cached one), the decision is a §8.5 event either way, and a
+    refusal is a 400 carrying the guardrail's own sentence rather than a traceback.
+
+    Switching invalidates process state that was built for the old repository — the
+    cached settings, the Qdrant client, the embedder and the BM25 encoder — so
+    ``reset_resources()`` drops all of it and the next request rebuilds. It does
+    **not** reindex: the response says whether an index exists, because a silent
+    switch that left the previous repository's chunks in place would answer questions
+    about the wrong codebase without any error at all.
+    """
+    settings = get_settings()
+    log = get_log(settings)
+    try:
+        target = resolve_selection(request.path, settings)
+    except NotSelectable as refusal:
+        log.emit(
+            stage=GuardrailStage.POLICY,
+            rule="policy.target_denied",
+            action=GuardrailAction.BLOCKED,
+            detail=str(refusal),
+            target=request.path,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"{request.path!r} is not a selectable repository. See GET /v1/repos.",
+        ) from refusal
+
+    log.emit(
+        stage=GuardrailStage.POLICY,
+        rule="policy.target_switch",
+        action=GuardrailAction.ALLOWED,
+        detail=f"target repo set to {target}",
+        target=str(target),
+    )
+
+    # Settings are read once per process from the environment and cached, so the
+    # environment is what has to change for the reread to see anything.
+    os.environ["TARGET_REPO"] = str(target)
+    get_settings.cache_clear()
+    reset_resources()
+
+    fresh = get_settings()
+    try:
+        indexed = store.count(get_resources()["client"], store.CODE_COLLECTION) > 0
+    except Exception:  # noqa: BLE001 — "no collection yet" is an answer, not a failure
+        indexed = False
+    return TargetResponse(
+        target_repo=str(fresh.target_repo),
+        indexed=indexed,
+        # Sessions created against the old repo hold worktrees cut from it. They are
+        # not invalidated here — reporting the count lets the UI say so rather than
+        # having the user discover it when a patch applies to the wrong tree.
+        active_sessions=len(get_store(fresh).list()),
+    )
 
 
 # --- metrics (cahier §11) --------------------------------------------------

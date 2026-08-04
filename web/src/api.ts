@@ -158,12 +158,40 @@ export const getMetrics = (id: string) =>
 
 // 202 and indexes in the background — the demo pre-warms, so this is the "no terminal"
 // escape hatch rather than something to wait on.
-export const startIndex = (incremental = true) =>
+//
+// `incremental` defaults to FALSE here, the opposite of the API's own default, and the
+// difference is deliberate. Incremental means "index whatever `git diff` reports since
+// the last run", so on an unchanged HEAD it is a no-op that still answers 202 — a button
+// that reports success and does nothing. That is not a hypothetical: a live run served an
+// index of the wrong repository entirely because this button could not rebuild. The API
+// keeps the cheap default for automation; a human clicking `Index repo` gets the one that
+// is always correct.
+export const startIndex = (incremental = false) =>
   fetch(`${BASE}/v1/index`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ incremental }),
   }).then(json<{ status: string; path: string; incremental: boolean }>)
+
+// --- target repository (D15b) ----------------------------------------------
+
+export interface RepoOption {
+  name: string
+  path: string
+  is_git: boolean
+  is_current: boolean
+}
+
+export const listRepos = () => fetch(`${BASE}/v1/repos`).then(json<RepoOption[]>)
+
+// The value sent back must be one the server itself listed — it re-enumerates and
+// compares, so this is a selection, never a path the client invents.
+export const setTarget = (path: string) =>
+  fetch(`${BASE}/v1/target`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  }).then(json<{ target_repo: string; indexed: boolean; active_sessions: number }>)
 
 // --- SSE -------------------------------------------------------------------
 

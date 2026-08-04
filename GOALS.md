@@ -338,6 +338,40 @@ Not met — the tree is ready and verified; the three remaining boxes are all hu
 
 ---
 
+### [ ] D15b · UI repo control — a deliberate un-freeze (decided 2026-08-04)
+
+Taken *after* `d15-freeze`, with the defence at 11:00 the next morning. Boxed here rather
+than done off-plan, per the scope-drift rule. **Not in the cahier**: §10.1 lists eight UI
+components and a repo switcher is none of them, so this is an addition the human chose, not
+a requirement being met. Say so if a jury asks.
+
+- [x] **Tier 1 — the `Index repo` button can rebuild.** Now labelled `Rebuild index` and
+      sends `incremental: false`; the API keeps the cheap default for automation. It sends `incremental: true` and
+      nothing else, so on an unchanged HEAD it returns `202 accepted` and does nothing. That
+      is how the container served an index of FORGE's own source during a live run. Add an
+      explicit full/incremental choice, defaulting to full
+- [x] **Tier 2 — pick the target repository from the UI, from an allowlist.** `src/forge/api/repos.py`
+      + `GET /v1/repos` + `POST /v1/target` + a `<select>` (never a text field). 19 tests.
+      `GET /v1/repos` enumerates what may be selected; `POST /v1/target` accepts only a value
+      from that enumeration and switches `TARGET_REPO` at runtime
+      (`get_settings.cache_clear()` + `reset_resources()`), logging a §8.5 event.
+      **The security argument is the whole design.** `registry._root_for()` uses
+      `settings.target_repo` as the confinement root for `read_file`/`list_files`, so a
+      free-text path field would let a browser choose what the sandbox may read — a direct
+      contradiction of §8.3's "no code path from a retrieved string to a permission". An
+      allowlist keeps the invariant: the browser *selects*, it never *supplies*. Server-side
+      re-enumeration on every request, `realpath` containment, and a red-team case for the
+      traversal attempt
+- [ ] ~~**Tier 3 — evals from the UI**~~ — **not taken.** Routes to run each harness, a
+      golden-set editor and a seeded-bug editor. Argued against and deferred: the expensive
+      part of retargeting is hand-verifying 42 golden pairs, which no UI removes, and the CLI
+      is the right surface for an eval harness. Recorded so the decision is visible, not silent
+
+**DoD: the browser can point FORGE at a different allowlisted repository and rebuild its
+index, and a path outside the allowlist is refused and logged.**
+
+---
+
 ## Cut list
 
 Priority order, decided in advance so the decision is never made under pressure. Descope §12 revises
