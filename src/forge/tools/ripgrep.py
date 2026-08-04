@@ -55,6 +55,8 @@ def ripgrep_search(
     """
     repo = Path(repo)
     if _RG is None:
+        if not fixed_string:
+            raise RuntimeError("ripgrep (rg) is required for regex search")
         return _python_search(
             pattern,
             repo,
@@ -123,7 +125,7 @@ def _python_search(
     max_count: int,
 ) -> list[RipgrepHit]:
     flags = re.IGNORECASE if ignore_case else 0
-    expr = re.escape(pattern) if fixed_string else pattern
+    expr = re.escape(pattern)
     if word:
         expr = rf"\b(?:{expr})\b"
     matcher = re.compile(expr, flags)
