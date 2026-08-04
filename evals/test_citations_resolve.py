@@ -51,13 +51,18 @@ def target(tmp_path):
 
 @pytest.fixture
 def settings(tmp_path):
-    """Isolated from the developer's .env and real index — offline, hashing embedder."""
+    """Isolated from the developer's .env and real index — offline, hashing embedder.
+
+    ``checkpoint_db`` is redirected too: the answer path emits §8.2 scan events, and
+    the real database is the source for the C2 notebook, not scratch space.
+    """
     return Settings(
         _env_file=None,
         cache_mode=CacheMode.REPLAY,
         embedding_model="hashing",
         qdrant_url="",
         qdrant_path=tmp_path / "qdrant",
+        checkpoint_db=tmp_path / "cp.sqlite",
     )
 
 

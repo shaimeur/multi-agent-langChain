@@ -11,7 +11,9 @@ string the model could invent. That is a cheap, strong grounding property, and i
 survives a weak local model far better than asking for exact ids back.
 
 This is the direct RAG path, not the multi-agent graph (SUPERVISOR/PLANNER/EDITOR,
-D5-D9). It is the smallest thing that is a genuinely usable service.
+D5-D9). It is the smallest thing that is a genuinely usable service. It carries its
+own §8.2 injection scan for that reason: it is a second entry point for third-party
+text, not a shortcut through the graph's one.
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from forge.config import LLMRole, Settings, get_settings
+from forge.guardrails.events import get_log
+from forge.guardrails.injection import scan_chunks
 from forge.llm.output import content_to_text
 from forge.llm.provider import build_llm
 from forge.models import Citation, ContextPack, GroundedAnswer, SourceRef
@@ -132,11 +136,15 @@ def answer_question(
     encoder=None,
     llm: BaseChatModel | None = None,
     repo=None,
+    session_id: str = "",
 ) -> GroundedAnswer:
     """Retrieve, answer from the retrieved snippets, and verify the citations.
 
     Every dependency is injectable so the API can share one client/model across
     requests and the tests can run against a fake model with no network.
+
+    ``session_id`` only attributes the §8.5 guardrail events this call emits; the
+    direct path is stateless and does not read it back.
     """
     settings = settings or get_settings()
     hits = hybrid_search(
@@ -155,6 +163,18 @@ def answer_question(
         return GroundedAnswer(
             question=question, answer=_EMPTY, grounded=False, sources=_sources(pack)
         )
+
+    # §8.2 — the same seam the graph's retriever node uses, for the same reason:
+    # this is the line where third-party repository text becomes prompt. Without it
+    # the direct path (`forge ask`, `POST /v1/ask`) would carry a planted instruction
+    # into the prompt that the graph path refuses — and the UI's Ask button routes
+    # every question down here.
+    #
+    # A clean chunk comes back as the *same object*, so a scanned pack and an
+    # unscanned one build byte-identical prompts on an unpoisoned corpus. That is
+    # what lets this land without invalidating a single replay fixture.
+    safe_chunks, _ = scan_chunks(pack.chunks, session_id=session_id, log=get_log(settings))
+    pack = pack.model_copy(update={"chunks": safe_chunks})
 
     repo_name = Path(str(repo or settings.target_repo)).name
     llm = llm or build_llm(LLMRole.REASONER, num_ctx=_ANSWER_NUM_CTX, settings=settings)

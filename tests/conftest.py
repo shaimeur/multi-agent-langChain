@@ -4,6 +4,7 @@ import pytest
 
 from forge.cache import reset_cache
 from forge.config import CacheMode, Settings, get_settings
+from forge.guardrails.events import reset_log
 
 
 @pytest.fixture(autouse=True)
@@ -19,9 +20,18 @@ def _isolate_global_settings(tmp_path, monkeypatch):
     monkeypatch.setenv("EMBEDDING_MODEL", "hashing")
     monkeypatch.setenv("QDRANT_URL", "")
     monkeypatch.setenv("QDRANT_PATH", str(tmp_path / "global-qdrant"))
+    # …and no test may write into the real checkpoint database. It is not scratch
+    # state: `notebooks/02_agent_traces.ipynb` (deliverable L3, gate C2) is built
+    # from its checkpoints and guardrail events, so a suite run that appended a few
+    # hundred synthetic events would quietly corrupt the evidence the notebook
+    # presents. Guardrail logging now happens on the plain answer path too, which is
+    # what made this reachable from tests that never mention a database.
+    monkeypatch.setenv("CHECKPOINT_DB", str(tmp_path / "global-checkpoints.sqlite"))
     get_settings.cache_clear()
+    reset_log()
     yield
     get_settings.cache_clear()
+    reset_log()
 
 
 @pytest.fixture

@@ -462,6 +462,7 @@ def test_the_events_route_is_in_the_openapi_schema():
 @pytest.fixture
 def api(tmp_path, monkeypatch):
     """The API on an isolated event database, so wiring tests see only their own."""
+    from forge.api.main import reset_resources
     from forge.config import get_settings
     from forge.guardrails import events as events_module
     from forge.guardrails.sentinel_in import get_rate_limiter
@@ -470,7 +471,12 @@ def api(tmp_path, monkeypatch):
     get_settings.cache_clear()
     events_module.reset_log()
     get_rate_limiter().reset()
+    # The API caches `settings` beside the client, and the routes pass that copy
+    # down to the guardrail log — so without this the events go to whichever
+    # database the *first* test in the file happened to configure.
+    reset_resources()
     yield TestClient(app)
+    reset_resources()
     events_module.reset_log()
     get_rate_limiter().reset()
 
@@ -526,4 +532,54 @@ def test_the_retriever_node_scans_retrieved_chunks_for_injection(monkeypatch, tm
     assert poisoned.raw.count("ignore all previous") == 1, "the indexed chunk is untouched"
 
     events = events_module.get_log(get_settings()).events(session_id="retr")
+    assert "injection.override" in {e.rule for e in events}
+
+
+def test_the_ask_route_scans_retrieved_chunks_for_injection(api, monkeypatch):
+    """O6 — the *other* door into the prompt, and the one the UI's Ask button uses.
+
+    The graph path is covered by the test above. This one goes through the real
+    ``POST /v1/ask`` handler, because until D14 that route had both sentinels and no
+    §8.2 scan: ``sentinel_in`` guards the user's question and ``sentinel_out`` guards
+    the answer, and a poisoned repository comment is neither. Only retrieval and the
+    model are stubbed — the scan under test is the shipped one.
+    """
+    from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+    from forge.config import get_settings
+    from forge.guardrails import events as events_module
+    from forge.models import SearchHit
+    from forge.rag import answer as answer_module
+
+    poisoned = _chunk(POISONED)
+    monkeypatch.setattr(
+        answer_module, "hybrid_search", lambda *a, **k: [SearchHit(chunk=poisoned, score=1.0)]
+    )
+    monkeypatch.setattr(
+        answer_module,
+        "build_llm",
+        lambda *a, **k: FakeListChatModel(responses=["Config parsing lives in [1]."]),
+    )
+
+    # What the model was actually handed. The event proves the scan ran; this proves
+    # it ran *upstream of the prompt*, which is the only place it is worth running.
+    prompts: list[str] = []
+    build_messages = answer_module._messages
+
+    def spy(question, pack, repo):
+        messages = build_messages(question, pack, repo)
+        prompts.append(str(messages[-1].content))
+        return messages
+
+    monkeypatch.setattr(answer_module, "_messages", spy)
+
+    response = api.post("/v1/ask", json={"question": "how is config parsed", "session_id": "askme"})
+
+    assert response.status_code == 200
+    assert prompts, "the model was never called — the test proved nothing"
+    assert "ignore all previous instructions" not in prompts[0].lower()
+    assert "parse_config" in prompts[0], "the code around the injection must survive"
+    assert poisoned.raw.count("ignore all previous") == 1, "the indexed chunk is untouched"
+
+    events = events_module.get_log(get_settings()).events(session_id="askme")
     assert "injection.override" in {e.rule for e in events}

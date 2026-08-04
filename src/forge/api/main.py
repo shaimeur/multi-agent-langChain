@@ -19,6 +19,7 @@ and rebuilding the embedder per request would reload the model weights every tim
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -71,6 +72,24 @@ def get_resources() -> dict:
             encoder=load_encoder(settings),
         )
     return _resources
+
+
+def reset_resources() -> None:
+    """Drop the cached client, embedder and *settings*. For tests that move them.
+
+    The settings object is cached alongside the client, and every route hands that
+    cached copy down — including to the guardrail log, which keys on
+    ``checkpoint_db``. A test that redirects the database and clears
+    ``get_settings`` still gets the stale object from here, so its events land in
+    the previous test's file and the assertion looks like a missing guardrail rather
+    than a missing reset. The embedded Qdrant client is closed on the way out: one
+    client per path per process, and leaking it locks the next test's directory.
+    """
+    client = _resources.get("client")
+    if client is not None:
+        with suppress(Exception):
+            client.close()
+    _resources.clear()
 
 
 # --- health ---------------------------------------------------------------
@@ -502,7 +521,10 @@ def ask(request: AskRequest) -> GroundedAnswer:
 
     Wrapped by both sentinels (cahier §8): ``sentinel_in`` validates and redacts the
     question before it reaches retrieval, ``sentinel_out`` re-verifies every citation
-    against what was actually retrieved before the answer leaves the process.
+    against what was actually retrieved before the answer leaves the process. The
+    §8.2 indirect-injection scan sits between them, inside ``answer_question``, where
+    the retrieved chunks become prompt — the sentinels guard the *user's* text, and a
+    poisoned repository comment never passes through either of them.
     """
     resources = get_resources()
     settings = resources["settings"]
@@ -526,6 +548,7 @@ def ask(request: AskRequest) -> GroundedAnswer:
                 client=resources["client"],
                 embedder=resources["embedder"],
                 encoder=resources["encoder"],
+                session_id=request.session_id,
             )
         except Exception:
             if session:
