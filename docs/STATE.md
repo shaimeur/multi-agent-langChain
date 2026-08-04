@@ -4,8 +4,8 @@
      GOALS.md is the durable plan; this file is where you are in it. -->
 
 Last updated : 2026-08-04
-Roadmap day  : D1–D13 done · **D14 all but the benchmark**. §15.6 ran in a browser (8/9 beats);
-               **C9 PASSED today** — one command, clean clone. C7/C10 need the video and quota
+Roadmap day  : **D1–D14 done — D14 DoD MET (both halves)**. §15.6 ran in a browser (8/9 beats);
+               **C9 PASSED and swe_mini ran 4/4 today**. D15 left: C7/C10 need the video
 Branch       : main
 
 ## Done (verified)
@@ -18,6 +18,11 @@ Branch       : main
       built *inside* the container, a session alive across `restart api`. Fuller record in GOALS.md
 - [x] **C4 both halves** — `pytest tests/test_graph.py -k restart` → exit 0, **and** the container
       restart inside the C9 run above
+- [x] **D14 DoD MET — the benchmark (2026-08-04)**. `--verify` → exit 0, 4 bugs sound (no model); the
+      real run → **exit 0, 4/4 REPAIRED, 0 regressions, 1.0 iterations, 80 s, 11 calls, 20 613
+      tokens**, and it **replays offline in 25 s**. `docs/evaluation.md` carries the three caveats:
+      **retrieval is bypassed** (scores the repair loop, not the system), 1.0 iterations = **the loop
+      never iterated**, A5 check passed on a name-string only. O7 → `limitations.md` §8
 - [x] **§15.6 in the browser (2026-08-03)** — live API + `gemini-flash-latest` + docker sandbox:
       index → citations → bug report → timeline (6 agents) → plan gate → test author RED (`exit=1`)
       → patch gate + diff → apply → sandbox (`453 passed, 28 failed`) → reviewer `revise` → **the
@@ -25,9 +30,8 @@ Branch       : main
       injection.override`); the model never obeyed the planted text
 - [x] **Offline replay proven** — `CACHE_MODE=replay forge ask` → exit 0, grounded, 4 citations, no
       network; identical through the UI. Cost panel: `turns 1 · calls 1 · guardrail events 3 · 6.2s`
-- [x] **C2 (2026-08-03)** — `notebooks/02_agent_traces.ipynb` from `data/checkpoints.sqlite` (node
-      order recovered from `branch:to:*` writes). **All 7 cells executed**: 3 interrupts, 3 editor
-      passes = 2 repair iterations, 35 guardrail events. Form 4 **wired but not fired** — honest
+- [x] **C2 (2026-08-03)** — `notebooks/02_agent_traces.ipynb` from `data/checkpoints.sqlite`, **all 7
+      cells run**: 3 interrupts, 2 repair iterations, 35 guardrail events; Form 4 wired but not fired
 - [x] **C6 Tools half** — `forge tools` → "FORGE tools — 10 operational". `tests/test_registry.py`
       invokes all seven knowledge tools and asserts `read_file`/`list_files` refuse a path escape
 - [x] D14 docs: `architecture.md` (new) · README rewritten · `requirements.txt` (383) ·
@@ -36,27 +40,23 @@ Branch       : main
       `make lint` clean; `npm run build` exit 0, oxlint clean
 
 ## In progress
-- **The benchmark — D14's last task, and the next action.** `evals/run_swe_mini.py` (4 bugs) →
-  resolution rate, repair iterations, cost/wall clock, regression rate → `docs/evaluation.md`.
-  **Needs quota**; it is all that stands between D14 and a met DoD.
 - **C7** — beat 6's *green* half: red→revise→better-patch is proven, the re-verify after the repair
-  is not (429 mid-run). Needs ~5 spare requests. Also `docs/demo.mp4` (D15, human).
+  is not (429 mid-run). Needs ~5 spare requests. Also `docs/demo.mp4` (D15, human). **Next action.**
 - **C10** — L1 ✓ L2 ✓ L3 ✓ L4 ✓ L6 ✓ (draft) · **L5 needs the recorded video**.
 
 ## Blocked / open decisions
-- **O6 (security) — `/v1/ask` does not run the §8.2 injection scan.** `scan_chunks` is called from
-  exactly one place, `core/agents/retriever.py`. The ask path has both sentinels but no scan of
-  *retrieved* chunks, so the poisoned comment produced zero `injection.*` events there. The UI's Ask
-  button routes every question down it. **Not fixed unilaterally — guardrail wiring is the human's.**
-- **O7 — retrieval cannot bridge a call hop.** SM-01's report names `get_real_name`; the defect is two
-  hops down in `utils.remove_quotes`, **absent from the top 35** (rank 2 once *named*), so the
-  planner's `missing` asked for the wrong file and no retry rescues it. Honest §12 limitation.
+- **O6 (security) — `/v1/ask` does not run the §8.2 injection scan.** `scan_chunks` is called only
+  from `core/agents/retriever.py`; the ask path has both sentinels but never scans *retrieved* chunks,
+  and the UI's Ask button routes every question down it. **Guardrail wiring is the human's call.**
+- **O7 — retrieval cannot bridge a call hop.** Now written up as **`limitations.md` §8** with the fix
+  scoped: ingestion records definition boundaries and **no call edges**, so the one-hop expansion
+  must extract callees and resolve them through `tools/ast_symbols.py`. Not started.
 - **O8 — ask-vs-change is decided by the UI**, not the SUPERVISOR: `Route` has no `CHANGE` member and
   the session stream only builds the change graph. Human chose the UI toggle over unifying the graph.
 - **O2 / C6 second half — MCP transport not built** (cut-list 1) · **B3** `qwen2.5-coder:7b` unpulled.
 - **O3** descope → cahier (human) · **O5** injection tier 2 · **O4** reviewer/editor same family.
 - **Quota: ≈20 free req/day PER MODEL** — hit 2026-08-03 mid-repair (`429`, typed frame, no crash).
-- **Gates: C1 C2 C3 C4 C5 C8 C9 closed · C6 half · C7 C10 open.**
+- **Gates: C1 C2 C3 C4 C5 C8 C9 closed · C6 half · C7 C10 open (both want the video).**
 
 ## Do not redo
 - **Ten defects already found and fixed** — five by the clean-machine test before it ever ran (no
@@ -75,6 +75,6 @@ Branch       : main
   there — root-anchored ignores missed `web/data/qdrant/`, so `**/data/qdrant/` now covers it.
 
 ## Notes for the next session
-- Real runs: `QDRANT_URL= CACHE_MODE=auto SANDBOX_BACKEND=docker GEMINI_CODER_MODEL=
-  GEMINI_REASONER_MODEL=gemini-flash-latest`. Blank `QDRANT_URL` or the embedded index is bypassed.
-  `make api`; `cd web && npm run dev` proxies `/v1` → :8000. Commits OMIT the Claude trailer.
+- Real runs (worked 2026-08-04): `QDRANT_URL= CACHE_MODE=auto SANDBOX_BACKEND=docker
+  GEMINI_REASONER_MODEL=gemini-flash-latest` — coder keeps `gemini-3.5-flash`; two IDs = two quota
+  pools. `make api`; `cd web && npm run dev` proxies `/v1` → :8000. Commits OMIT the Claude trailer.

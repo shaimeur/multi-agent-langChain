@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "ba87aaa03b3344e7",
+  "recorded_at": "2026-08-04T10:26:50+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: Formatting with identifier_case='upper' also uppercases quoted identifiers. 'select * from \\\"MyTable\\\"' becomes 'select * from \\\"MYTABLE\\\"', which changes what the SQL means \\u2014 a quoted identifier is case-sensitive and must be left alone.\\nTarget file: sqlparse/filters/tokens.py\\nDeclared blast radius: (none declared)\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/filters/tokens.py\\n<<< old\\nclass IdentifierCaseFilter(_CaseFilter):\\n    ttype = T.Name, T.String.Symbol\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype:\\n                value = self.convert(value)\\n            yield ttype, value\\n>>> new\\nclass IdentifierCaseFilter(_CaseFilter):\\n    ttype = T.Name, T.String.Symbol\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype:\\n                if not (value.startswith('\\\"') and value.endswith('\\\"') or\\n                        value.startswith('`') and value.endswith('`') or\\n                        value.startswith('[') and value.endswith(']')):\\n                    value = self.convert(value)\\n            yield ttype, value\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\n  \"plan_conformance\": true,\n  \"plan_conformance_why\": \"The patch directly addresses the issue by skipping identifier case conversion when an identifier token is enclosed in quotes, backticks, or square brackets, without any unrelated refactoring.\",\n  \"regression_risk_ok\": true,\n  \"regression_risk_why\": \"The change is strictly contained within IdentifierCaseFilter.process in sqlparse/filters/tokens.py and only affects quoted identifiers.\"\n}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"plan_conformance\": true,\n  \"plan_conformance_why\": \"The patch directly addresses the issue by skipping identifier case conversion when an identifier token is enclosed in quotes, backticks, or square brackets, without any unrelated refactoring.\",\n  \"regression_risk_ok\": true,\n  \"regression_risk_why\": \"The change is strictly contained within IdentifierCaseFilter.process in sqlparse/filters/tokens.py and only affects quoted identifiers.\"\n}",
+                "extras": {
+                  "signature": "Eo8JCowJARFNMg+BNPCCiAsQtUdCxMKg91NmBlu8MI7l3Hn2sPgNLA5Y1ca7XrjR8Y08qbirw6PX1VcrVVbK4P48TzwChEPMW5UNUsT8QXID5a1MSDaQHCkyuSp3ZyH0CRtCuxZU6zmsw1OKRg7fCw4G3BPNbUenJaRvtzbeLPzaenV7J3dfKNpOnFuIsDgMWI13xAxu0pIcHSgOY1KswQI4JEN2G1SFo07nYodMInOuURMKrpsp+8wq94mX6lFF6FPjhBhlpK2WOJNWq4Q+MCXpoyZvcAK5uIJQQ6tk6TnnnwqG7cr8g8fEX4T+dOXLLco/WK4zdfJmJ4mDeAHBUv0mJLc8ehkBW+u/5L5nDqEO278Cz82pcRYtmb86QsEzHn1QqFPv8Njcl6DWTVaTCYwLLUisAIi4E/RPslG9f3E2kywZrD7Fwe8N4xDWKdB4NBC2g18U2zq7zBOX73tbKDxxZEbHcaehbpU3qSNRupm7fOJGHTFHsobjczJG3BkUrKWKvN0xTalMR2KbzTTdSLgzmB3PyPjAbSM9uQsr8vTFZcCs8iGFHe8txBCQyIgLeRsLQNacLyE3zcNvays13cD5hcczjo2OhMIRvniFuSgsWTyegA0PavOzj75ojXEo+9ImF4w0oYRv9ZrYXXCWKMUwKAOCFhlzvGAb1Gb7k1jaWmELnSJiYqfrZI2cuCe3ImCNP5biC+iFm8TxYUJ1btCuJ1RqT7rvh8RFVAeB+7InEm3r4eyC9RH4O95QQS4WOLjAmGJUeBy0BccqZ5PBYvQsa8Nf2ClCH/8fzfWfoBjWtZ53bsdUObpulCZx6rU6FNbW9NksvJEtwGAUBK2fqwZyFRpbVDkzRcKHbx46EzWUYmFxSRu4fk1QG3x8nogP1wBavenwY/FD7o3bkEIEdBvxmxkzIcc5mvtsbE1UL8j+/lEE1KnPo0iGwzKl7g5zqsFx2+ixLS07zVErTrg0q8GeJUnio5ThMRcsGnRPt+fsuBZufQTB3irG8qbHhoa9v3VdvjR96f8ys1THxVwKBQzXKxvaPrsp64+nP4+JnGdORimzOvo6bo0hZmnTH9LJlshymzDg9SLHVflLAPabEjRpV7PPGPZi1fMSQ6cqiMR9C7ViNsFhXD/iAkuI1nNC/cCtUIJSIuQZNVXeXX2mdTRI+Y0O6JJRf23lcRZoWUboAT4pZ0ItWm5nJVi2MhO6JqjJc7bVFmkl0V4dM8x8IojxHdybh1CFFTJi2hvxHsK26SwbyE98VwcJdxPvx9QIjSccDAXw5GJPQ+vGtK8xwBaQE5GIkvpNmltmQ6W2Z/j7+CKByoYR9txAjokhuEAYGfbImGuQ8JogKrITTSFd0SY3scSVzemavSVvq2+LjpJXxSnOwqhn7ydV0QZzj/cLVvQdVG61DWngxxf9xIf6u4zuMuA6E9iQfckrBmV469Al0bz/y8MFSOv166al9Q2hXse55qHTXxVeY83QynnADhNR2O9NIu93Y0tC0NoX0jC9njkq1u5t9Nfub9oEEYn3btfZ9C2yetRPdUCMVvcE/7Kj"
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fcc4f-c30f-78b3-81a8-346951279ec8-0",
+            "usage_metadata": {
+              "input_tokens": 416,
+              "output_tokens": 384,
+              "total_tokens": 800,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 280
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "73bce31d2ecb2976",
+  "recorded_at": "2026-08-04T10:26:27+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: sqlparse.split('select 1; ', strip_semicolon=True) returns ['select 1;'] instead of ['select 1'] \\u2014 the semicolon survives when there is trailing whitespace after it. With no trailing space it works.\\nTarget file: sqlparse/filters/others.py\\nDeclared blast radius: (none declared)\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/filters/others.py\\n<<< old\\nclass StripTrailingSemicolonFilter:\\n\\n    def process(self, stmt):\\n        if stmt.tokens and (stmt.tokens[-1].is_whitespace\\n                               or stmt.tokens[-1].value == ';'):\\n            stmt.tokens.pop()\\n        return stmt\\n>>> new\\nclass StripTrailingSemicolonFilter:\\n\\n    def process(self, stmt):\\n        while stmt.tokens and stmt.tokens[-1].is_whitespace:\\n            stmt.tokens.pop()\\n        if stmt.tokens and stmt.tokens[-1].value == ';':\\n            stmt.tokens.pop()\\n            while stmt.tokens and stmt.tokens[-1].is_whitespace:\\n                stmt.tokens.pop()\\n        return stmt\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch updates StripTrailingSemicolonFilter to remove trailing whitespace tokens before checking for and stripping the trailing semicolon token, directly addressing the reported bug without extraneous changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"The changes are localized to the affected filter class in sqlparse/filters/others.py and no declared blast radius files were left untouched.\"}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch updates StripTrailingSemicolonFilter to remove trailing whitespace tokens before checking for and stripping the trailing semicolon token, directly addressing the reported bug without extraneous changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"The changes are localized to the affected filter class in sqlparse/filters/others.py and no declared blast radius files were left untouched.\"}",
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fcc4f-6869-71a3-9986-236a4e7d057f-0",
+            "usage_metadata": {
+              "input_tokens": 385,
+              "output_tokens": 634,
+              "total_tokens": 1019,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 542
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "5316f3b1a88fe308",
+  "recorded_at": "2026-08-04T10:27:05+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-3.5-flash\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'$defs': {'Patch': {'description': 'One structured edit to one file — a search/replace, not raw diff syntax.\\n\\nThe EDITOR emits these because asking a model (a weak local one especially) for\\nvalid unified-diff text is brittle; the diff is *built* deterministically from\\nthe edits (``tools/patch.py``) and only then checked with ``git apply --check``.\\n``old_string`` must occur exactly once in the target file so the edit is\\nunambiguous.', 'properties': {'path': {'title': 'Path', 'type': 'string'}, 'old_string': {'title': 'Old String', 'type': 'string'}, 'new_string': {'title': 'New String', 'type': 'string'}, 'rationale': {'default': '', 'title': 'Rationale', 'type': 'string'}}, 'required': ['path', 'old_string', 'new_string'], 'title': 'Patch', 'type': 'object'}}, 'description': \"The EDITOR's output for a plan step (cahier §4/A3).\\n\\nStructured edits the editor never writes to disk itself — ``tools/patch.py``\\nturns them into a diff and dry-runs ``git apply --check`` in the session\\nworktree; a patch that fails the check never reaches a human.\", 'properties': {'summary': {'default': '', 'title': 'Summary', 'type': 'string'}, 'patches': {'items': {'$ref': '#/$defs/Patch'}, 'title': 'Patches', 'type': 'array'}}, 'title': 'PatchSet', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the EDITOR for FORGE. Given a plan step and the current contents of the target file, produce a PatchSet of minimal search/replace edits. Each patch's old_string must be an EXACT, UNIQUE substring of the file \\u2014 copy it verbatim, including indentation \\u2014 and new_string is its replacement. Change only what the step requires. Never output diff syntax; only the structured edits.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Target file: sqlparse/filters/tokens.py\\nStep: format(sql, truncate_strings=3) truncates one character too early: \\\"select 'abcdefghij'\\\" gives 'ab[...]' when it should give 'abc[...]'. The truncated string should keep exactly `truncate_strings` characters.\\n\\n<file>\\n#\\n# Copyright (C) 2009-2020 the sqlparse authors and contributors\\n# <see AUTHORS file>\\n#\\n# This module is part of python-sqlparse and is released under\\n# the BSD License: https://opensource.org/licenses/BSD-3-Clause\\n\\nfrom sqlparse import tokens as T\\n\\n\\nclass _CaseFilter:\\n    ttype = None\\n\\n    def __init__(self, case=None):\\n        case = case or 'upper'\\n        self.convert = getattr(str, case)\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype:\\n                value = self.convert(value)\\n            yield ttype, value\\n\\n\\nclass KeywordCaseFilter(_CaseFilter):\\n    ttype = T.Keyword\\n\\n\\nclass IdentifierCaseFilter(_CaseFilter):\\n    ttype = T.Name, T.String.Symbol\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype in self.ttype and value.strip()[0] != '\\\"':\\n                value = self.convert(value)\\n            yield ttype, value\\n\\n\\nclass TruncateStringFilter:\\n    def __init__(self, width, char):\\n        self.width = width\\n        self.char = char\\n\\n    def process(self, stream):\\n        for ttype, value in stream:\\n            if ttype != T.Literal.String.Single:\\n                yield ttype, value\\n                continue\\n\\n            if value[:2] == \\\"''\\\":\\n                inner = value[2:-2]\\n                quote = \\\"''\\\"\\n            else:\\n                inner = value[1:-1]\\n                quote = \\\"'\\\"\\n\\n            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\\n            yield ttype, value\\n\\n</file>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\n  \"summary\": \"Fix TruncateStringFilter to keep exactly `width` characters instead of `width - 1` characters.\",\n  \"patches\": [\n    {\n      \"path\": \"sqlparse/filters/tokens.py\",\n      \"old_string\": \"            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\",\n      \"new_string\": \"            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width], self.char, quote))\",\n      \"rationale\": \"The TruncateStringFilter was truncating one character too early by slicing `inner[:self.width - 1]`. Changing it to `inner[:self.width]` ensures that exactly `self.width` characters are kept before appending the truncation character/string.\"\n    }\n  ]\n}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.5-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"summary\": \"Fix TruncateStringFilter to keep exactly `width` characters instead of `width - 1` characters.\",\n  \"patches\": [\n    {\n      \"path\": \"sqlparse/filters/tokens.py\",\n      \"old_string\": \"            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\",\n      \"new_string\": \"            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width], self.char, quote))\",\n      \"rationale\": \"The TruncateStringFilter was truncating one character too early by slicing `inner[:self.width - 1]`. Changing it to `inner[:self.width]` ensures that exactly `self.width` characters are kept before appending the truncation character/string.\"\n    }\n  ]\n}",
+                "extras": {
+                  "signature": "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"
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.5-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fcc4f-ff52-7cb3-b708-d11006a8552d-0",
+            "usage_metadata": {
+              "input_tokens": 586,
+              "output_tokens": 724,
+              "total_tokens": 1310,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 515
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

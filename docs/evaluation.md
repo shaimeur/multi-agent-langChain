@@ -208,8 +208,81 @@ expansion are in place, each a bigger lever than the embedder swap. BGE-M3 stays
 
 ## D14 — end-to-end
 
-Pending `swe_mini` (4 seeded bugs, cut from 10 — `descope-v1.md` §7): resolution rate, mean repair
-iterations, cost and wall-clock per task, regression rate.
+`swe_mini`, 4 seeded bugs (cut from 10 — `descope-v1.md` §7), run 2026-08-04 against
+`gemini-3.5-flash` (editor) and `gemini-flash-latest` (reviewer), sandbox on the docker backend,
+`CACHE_MODE=auto`. Target repo `sqlparse@0d24023`.
+
+### The harness self-check comes first
+
+`uv run python evals/run_swe_mini.py --verify` → **exit 0, all four sound**. It needs no model: it
+proves each bug's hidden test is green on clean code, red once seeded, and green again after the
+reference fix. A score without this is a measurement of the harness, not of the agent — and a target
+repo bump is exactly what silently breaks it.
+
+| bug | defect | verdict |
+|---|---|---|
+| SM-01 | `remove_quotes` leaves the closing quote behind | sound |
+| SM-02 | `strip_semicolon` only removes one trailing token | sound |
+| SM-03 | `identifier_case` rewrites quoted identifiers | sound |
+| SM-04 | `truncate_strings` keeps one character too few | sound |
+
+### The run
+
+`uv run python evals/run_swe_mini.py` → **exit 0, 4/4 repaired**.
+
+| bug | status | iterations | hidden test |
+|---|---|---:|---|
+| SM-01 | REPAIRED | 1 | `exit=0` 1 passed in 0.59s |
+| SM-02 | REPAIRED | 1 | `exit=0` 1 passed in 0.51s |
+| SM-03 | REPAIRED | 1 | `exit=0` 2 passed in 0.62s |
+| SM-04 | REPAIRED | 1 | `exit=0` 1 passed in 0.51s |
+
+| metric | value |
+|---|---:|
+| Resolution rate | **4/4 (100%)** |
+| Regression rate | **0/4 (0%)** |
+| Mean repair iterations | **1.0** |
+| Wall clock | 80 s total, **~20 s/task** |
+| LLM calls | 11 total, **2.75/task** |
+| Tokens | 20 613 total (9 868 in / 10 745 out), **~5 150/task** |
+
+The 11 calls were recorded as fixtures, so the whole benchmark **replays with the network off**:
+`CACHE_MODE=replay … run_swe_mini.py` → exit 0, the same 4/4, in **25 s** rather than 80. The 55 s
+difference is the provider latency, and the replay is what makes this table re-runnable in front of
+a jury on a dead network.
+
+`REPAIRED` is the strict verdict: the hidden test passed **and** the target's full suite still
+passed. A fix that bought the hidden test at the cost of a regression grades `REGRESSED`, not
+`REPAIRED`, so the 0% regression rate is carried by the same four results rather than asserted
+separately.
+
+### Three things this number does not say
+
+**It is not an end-to-end score — retrieval is bypassed.** `run_swe_mini.py` builds the
+`ContextPack` directly from the seeded file (`the pack stands in for retrieval`, its own comment).
+So 4/4 measures the planner→editor→sandbox→reviewer loop *given the correct file*. It is not what
+the full system scores from a bug report alone: the O7 limitation in `limitations.md` records that
+for SM-01 the report names `get_real_name` while the defect is two call hops down in
+`utils.remove_quotes`, absent from the top 35 retrieved chunks. End-to-end, SM-01 would fail at
+retrieval before the loop ever saw it. The honest reading is that this table scores repair, and §D3
+scores retrieval, and the system is the weaker of the two.
+
+**Mean iterations of 1.0 means the repair loop never had to iterate.** Every first patch passed both
+review and the hidden test, so this run exercises the loop's happy path only. The evidence that the
+repair path *works* is the §15.6 browser run, where the reviewer returned `revise` on a red sandbox
+result and the second patch was better — not this benchmark.
+
+**The §4/A5 "critic off the editor's family" check passed on a technicality.** It compares
+configured model-name strings; `gemini-flash-latest` and `gemini-3.5-flash` differ as strings, so
+the harness printed no warning, but both are Gemini Flash. The critic very likely still shares the
+editor's blind spots. Splitting the two roles across two model IDs was done to split the free-tier
+per-model quota, and it should not be read as genuine model diversity.
+
+### Why four bugs and not ten
+
+`descope-v1.md` §7. The ceiling is free-tier quota, not code — `--limit N` runs any subset, and this
+run cost 11 calls against a ~20/day/model allowance. Four bugs with numbers that were actually
+measured beat ten extrapolated from one.
 
 ---
 

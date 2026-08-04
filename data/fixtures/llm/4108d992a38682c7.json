@@ -1,0 +1,72 @@
+{
+  "namespace": "llm",
+  "key": "4108d992a38682c7",
+  "recorded_at": "2026-08-04T10:27:12+00:00",
+  "request": {
+    "llm": "{\"id\": [\"langchain_google_genai\", \"chat_models\", \"ChatGoogleGenerativeAI\"], \"kwargs\": {\"default_metadata\": [], \"google_api_key\": {\"id\": [\"GOOGLE_API_KEY\"], \"lc\": 1, \"type\": \"secret\"}, \"location\": null, \"max_retries\": 6, \"model\": \"gemini-flash-latest\", \"n\": 1, \"output_version\": null, \"temperature\": 0.0}, \"lc\": 1, \"name\": \"ChatGoogleGenerativeAI\", \"type\": \"constructor\"}---[('response_json_schema', {'description': 'The *only* thing the reviewer model is asked for — the two points that need\\njudgement. Keeping it a separate schema from ``ReviewVerdict`` is what makes it\\nstructurally impossible for the model to answer the programmatic three.', 'properties': {'plan_conformance': {'default': False, 'title': 'Plan Conformance', 'type': 'boolean'}, 'plan_conformance_why': {'default': '', 'title': 'Plan Conformance Why', 'type': 'string'}, 'regression_risk_ok': {'default': False, 'title': 'Regression Risk Ok', 'type': 'boolean'}, 'regression_risk_why': {'default': '', 'title': 'Regression Risk Why', 'type': 'string'}}, 'title': 'ReviewJudgement', 'type': 'object'}), ('response_mime_type', 'application/json'), ('stop', None)]",
+    "prompt": "[{\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"SystemMessage\"], \"kwargs\": {\"content\": \"You are the REVIEWER for FORGE. You are given a plan step and the patch that claims to implement it. Judge exactly two things and nothing else. (1) plan_conformance: does the patch implement the planned step, and ONLY that step \\u2014 no unrelated refactoring, no scope creep? (2) regression_risk_ok: given the files the plan expected to affect, is it safe that the listed files were left untouched? Do not comment on whether the tests passed or whether citations resolve \\u2014 those are decided elsewhere and your opinion on them is not used.\", \"type\": \"system\"}}, {\"lc\": 1, \"type\": \"constructor\", \"id\": [\"langchain\", \"schema\", \"messages\", \"HumanMessage\"], \"kwargs\": {\"content\": \"Planned step: format(sql, truncate_strings=3) truncates one character too early: \\\"select 'abcdefghij'\\\" gives 'ab[...]' when it should give 'abc[...]'. The truncated string should keep exactly `truncate_strings` characters.\\nTarget file: sqlparse/filters/tokens.py\\nDeclared blast radius: (none declared)\\nBlast-radius files left untouched: (none)\\n\\n<patch>\\n--- sqlparse/filters/tokens.py\\n<<< old\\n            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width - 1], self.char, quote))\\n>>> new\\n            if len(inner) > self.width:\\n                value = ''.join((quote, inner[:self.width], self.char, quote))\\n</patch>\", \"type\": \"human\"}}]"
+  },
+  "response": [
+    {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "schema",
+        "output",
+        "ChatGeneration"
+      ],
+      "kwargs": {
+        "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch updates string slicing from `inner[:self.width - 1]` to `inner[:self.width]`, exactly addressing the off-by-one truncation bug described in the plan step without any unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"The change is tightly scoped to the single line performing string truncation in `sqlparse/filters/tokens.py` and carries negligible regression risk.\"}",
+        "generation_info": {
+          "finish_reason": "STOP",
+          "model_name": "gemini-3.6-flash",
+          "safety_ratings": []
+        },
+        "type": "ChatGeneration",
+        "message": {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "AIMessage"
+          ],
+          "kwargs": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"plan_conformance\":true,\"plan_conformance_why\":\"The patch updates string slicing from `inner[:self.width - 1]` to `inner[:self.width]`, exactly addressing the off-by-one truncation bug described in the plan step without any unrelated changes.\",\"regression_risk_ok\":true,\"regression_risk_why\":\"The change is tightly scoped to the single line performing string truncation in `sqlparse/filters/tokens.py` and carries negligible regression risk.\"}",
+                "extras": {
+                  "signature": "EqUJCqIJARFNMg8znWfndUUGnWvn6ON8mV5CcqDZEHZYEF7vfCESP27zOGU4Ol5Fjc9HCojlM9Moq/pz/s0isEzjXB/sBwjCEww3Aa/a0IZEKWd7ROKZIvxzUeCisJ1cAPGs3O4fX8qLP7OasWIHV8X+sa22fUFXN4rekySohP5sM5pXlfxN0yQQOaO2XmTaAlgnmA8mUMtG75nYpy7RS+1ssPMLRSZXxzpYd9/q3h8/0BXQhV+2mo78ba84x77gXmecCz1Kmt3nRtUY+0/BvN70ucnKOsjVJk4stq9ZvcqeaabdvUv+/03iO1z7ESLH19nUz8xOGesF/FulRKBUyp8CUC0pgZtVGpKNrrlW/mts4+2lxzhykH2RiAJl4FRjkOlciLXAjk2XU/Zj2WC5QxIPpb3gLFYuxGbfUmivL8c9dNGLnnnJnNK4botvpgy38j55gQ4WF8pJtI5FScKV8BRuQNhEIex4gCYkIT/aG2T5q6QnKHQCvzlpCSSpF95WGHi6y6riOzp4YNvMlQtALv29MTIbASJ5ydCUpfnQcTfgLjkyXrekYwJ4vOSerXN29lAnoX5FiJa8IlXXjwNtQzXkAFiRFjwf4nZ0qaMYJkk69l0p+QS1K8F/Gch6foJxy5nXOwbcgGn17uwxw8zyFxh9phZsov7n3nVt0S4dcAzTvFZlPMvD+L0NpyiShFnLmAnPyi3XFqEamvn1KW89W/lP/iwu7sFkHZUFAA4E14GQKFZS7KHW2E909xv/0uoMz2RVWhwVk64091NHZLaMrgBXcysuZ+UvMpKRZVSLLOSSm/0+QDTjifONQyri2Zt+elLbCdvwB7FVmp0XaHBK6lTIICdTXFso+VPYNY8E9hhFuVF/4MJTEIHJddTKpAZrEGzDzGQEeOiXrk3VsvnyBP4u6PeJeFreFOJfOeVua00iZUxNfueqBZfLCCjyV2ncuPrJ9adZ+Hk+H6YPeV652G2FIIAODG1UYVihZFV4YkyWiOQjSFeo4zjd6eNqTQA4Wh1YWM3Op24x9QPeb/4C0AYNPrseEIvFaCH1Te9rb4WnzpPSUoWFK0Jxr3X7DMp0uKOWyDtyXBfISFKKlJW1mPOyqJuOsa0SvNJAEjhuo8mdat+y7qqynO73d63/tAfSmQoAWmLXTJb9w1aoA7N10tp8zd6OSi9hf8uMz1CqEpq54xdmGFLgPXAhCyoExU9Jt6sTN3f8SDncyhYWuFTW5zpsgjgZ+RIySRNmPhLtJJzps7YeM8qk3HnvDa0KvGl+fI4eISN0UINSqzQAuLi66DSaTZHBqMOa+hxZrdK4SaV7ctGUsrcBA5KuDo3krICY+B0WEJ8j56e6YoRG5z6uh5ZVtpct/6/j8WbBXy5yqpq6HrCT6KpT4WjUMWUwcf4/YkRFhx96qlCmShINmqLn0/jpdpe67FmQ3+8sXSSwXrGoWP8kcrl8GRvKz43Rq/isQ7tKQ3tK0E+eSGPalFPINcXqcWg4UoofdMiuTJVKXGWiRJ858Uzu5239W0BlDi0pqEeNRoylXnIRZvY2U8WuLmIlq5200oq7duX/7AVzZcw9z7RDMKmgYQ=="
+                }
+              }
+            ],
+            "response_metadata": {
+              "finish_reason": "STOP",
+              "model_name": "gemini-3.6-flash",
+              "safety_ratings": [],
+              "model_provider": "google_genai"
+            },
+            "type": "ai",
+            "id": "lc_run--019fcc50-1256-7a23-b7e8-69a25b8cdb8e-0",
+            "usage_metadata": {
+              "input_tokens": 297,
+              "output_tokens": 378,
+              "total_tokens": 675,
+              "input_token_details": {
+                "cache_read": 0
+              },
+              "output_token_details": {
+                "reasoning": 272
+              }
+            },
+            "tool_calls": [],
+            "invalid_tool_calls": []
+          }
+        }
+      }
+    }
+  ]
+}

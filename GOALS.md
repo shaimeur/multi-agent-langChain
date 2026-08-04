@@ -302,18 +302,19 @@ three new open items are in STATE.md as **O6** (`/v1/ask` skips the §8.2 inject
 
 ## Sprint 5 — Integration and defense (D14–D15)
 
-### [ ] D14 · Containerisation, benchmark, documentation — **clean-machine half of the DoD met (2026-08-04)**; the benchmark half is the last task open
+### [x] D14 · Containerisation, benchmark, documentation — **DoD MET (2026-08-04)**: both halves, the clean machine and the benchmark
 
 - [x] Multi-stage Dockerfile (node stage builds `web/`, api stage serves it), git + ripgrep installed, entrypoint bootstraps the target repo, `API_PORT` overridable
 - [x] **`scripts/clean_machine_test.sh`** written — clones HEAD into an empty dir, `cp .env.example .env`, `docker compose up`, then probes health/openapi/SPA/index/search and restarts the container to prove C4. **It already revealed five defects, all fixed** (no `git` in the image, no `ripgrep`, no target repo in a clone, `.env.example` defaulting to `CACHE_MODE=auto`, no UI served at all)
 - [x] **The run itself — `API_PORT=18000 scripts/clean_machine_test.sh` → exit 0, C9 PASS (2026-08-04)**, on a clone of `84d1a9f` with no `.env`, no index and no `node_modules`. `health {"cache_mode":"replay","offline":true}` · openapi served · SPA served from the same origin · index built **inside** the container (3 hits) · session resumed after `restart api` (**C4's container half**). The earlier blocker was environmental: the Docker daemon now has registry egress
-- [ ] Run `swe_mini` (4 bugs): resolution rate, mean repair iterations, cost and wall clock per task, regression rate → `docs/evaluation.md` — needs quota
+- [x] **Ran `swe_mini` (2026-08-04)** — `--verify` first (**exit 0, all four bugs sound**, no model), then the real run → **exit 0, 4/4 REPAIRED, 0/4 regressions, mean 1.0 iterations, 80 s total (~20 s/task), 11 LLM calls, 20 613 tokens (~5 150/task)**. Written up in `docs/evaluation.md` with the three caveats that keep it honest: **retrieval is bypassed** (the harness hands the agent the correct file, so this scores the repair loop, not the system — see new `limitations.md` §8 / O7), mean iterations of 1.0 means **the repair loop never actually iterated** (the §15.6 browser run is the evidence it works), and the §4/A5 same-family check passed only on a **model-name string difference** (`gemini-flash-latest` vs `gemini-3.5-flash` are both Flash)
 - [x] README rewritten: one-command quickstart, "use it on your own project", API table, honest "what does not work yet". Stale status claims deleted
 - [x] `make requirements` → `requirements.txt` (383 lines)
 - [x] `docs/architecture.md` written; `docs/limitations.md` already existed. Folding descope back into the cahier is still **O3** (frozen file — human)
 
 **DoD: one command brings the whole system up on a clean machine, and the benchmark numbers are
-recorded.**
+recorded.** — **MET 2026-08-04.** `scripts/clean_machine_test.sh` → exit 0 "C9 PASS"; `swe_mini`
+→ exit 0, 4/4, recorded in `docs/evaluation.md`. Both commands ran; both exit statuses observed.
 
 ### [ ] D15 · Slides, rehearsal, freeze
 

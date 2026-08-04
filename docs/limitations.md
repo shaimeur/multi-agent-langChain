@@ -168,3 +168,32 @@ privilege invariance — are what carries the load in that case.
 
 <!-- Entries below this line are not sandbox-related. Add new ones with the same
      shape: where, since which day, and the gap stated plainly. -->
+
+## 8 — Retrieval cannot bridge a call hop
+
+**Where:** `src/forge/core/agents/retriever.py` · **Since:** D14 (measured on `swe_mini` SM-01)
+
+Retrieval scores chunks against the *words of the question*. It has no notion of "and
+whatever that function calls". When the symbol naming the defect is one the report
+never mentions, it is not retrieved, and no amount of `k` fixes it.
+
+SM-01 is the concrete case. The bug report names `get_real_name`; the actual defect is
+two call hops down, in `utils.remove_quotes`. That chunk is **absent from the top 35** —
+yet it ranks 2nd the moment the query names it. The retrieval is not weak, it is
+answering a different question from the one that matters.
+
+The repair loop cannot recover from this on its own. The planner's `missing` field is
+the designed escape hatch, but it asks for the file the *report* implicated, so the
+retry returns the same neighbourhood and the second pass fails for the first reason.
+
+This is why `docs/evaluation.md`'s 4/4 on `swe_mini` is scoped to the repair loop: that
+harness hands the agent the correct file rather than retrieving it. End to end, from a
+bug report alone, SM-01 fails before the loop starts.
+
+The fix is a one-hop call-graph expansion of the pack, and it is smaller than it sounds
+but is **not** free: ingestion records definition boundaries only (`ChunkKind.FUNCTION`,
+`METHOD`, `CLASS`, `MODULE`) and no call edges, so there is no graph to walk today. What
+does exist is `find_definitions`/`find_references` in `src/forge/tools/ast_symbols.py`,
+which already resolve a symbol to its definition. The missing piece is extracting the
+callees from a retrieved chunk's body and resolving each through that tool before the
+pack is capped. That is the first thing to build next, not a redesign.
