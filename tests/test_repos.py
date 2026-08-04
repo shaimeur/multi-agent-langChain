@@ -287,3 +287,84 @@ def test_an_accepted_switch_is_logged_too(api, workspace):
 
     rules = {e.rule for e in get_log(get_settings()).events()}
     assert "policy.target_switch" in rules
+
+
+# --- the drop zone (D15c) ---------------------------------------------------
+
+
+def test_a_pdf_is_readable_by_the_walker(tmp_path):
+    """PDFs are binary, so they must bypass the NUL-byte test that rejects binaries."""
+    from forge.rag.walker import _read_text
+
+    pdf = tmp_path / "doc.pdf"
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    with pdf.open("wb") as fh:
+        writer.write(fh)
+
+    # A blank page extracts to nothing, and None is the honest answer — an empty chunk
+    # in the index would answer questions with silence instead of admitting it is empty.
+    assert _read_text(pdf) is None
+
+    real = tmp_path / "real.pdf"
+    real.write_bytes(b"%PDF-1.4 not actually a pdf")
+    assert _read_text(real) is None, "an unparseable PDF is skipped, never fatal"
+
+
+def test_an_upload_filename_cannot_steer_where_it_lands(api, tmp_path, monkeypatch):
+    """The whole traversal defence is `Path(name).name`, so assert it directly."""
+    from forge.config import get_settings
+    from forge.guardrails.events import get_log
+
+    drop = tmp_path / "uploads"
+    monkeypatch.setenv("UPLOAD_DIR", str(drop))
+    get_settings.cache_clear()
+
+    response = api.post(
+        "/v1/uploads",
+        files=[("files", ("../../../../etc/authorized_keys.md", b"# hi\n", "text/markdown"))],
+    )
+
+    assert response.status_code == 201
+    assert response.json()["stored"] == ["authorized_keys.md"]
+    assert (drop / "authorized_keys.md").is_file()
+    assert not (tmp_path / "etc").exists(), "nothing was written outside the drop folder"
+
+    rules = {e.rule for e in get_log(get_settings()).events()}
+    assert "policy.upload_path_stripped" in rules, "a client sending a path is worth logging"
+
+
+def test_an_unindexable_upload_is_refused_with_a_reason(api, tmp_path, monkeypatch):
+    """Accepting it would leave a file that looks indexed and contributes nothing."""
+    from forge.config import get_settings
+
+    monkeypatch.setenv("UPLOAD_DIR", str(tmp_path / "uploads"))
+    get_settings.cache_clear()
+
+    body = api.post(
+        "/v1/uploads",
+        files=[("files", ("payload.exe", b"MZ\x00\x00", "application/octet-stream"))],
+    ).json()
+
+    assert body["stored"] == []
+    assert ".exe is not indexable" in body["refused"]["payload.exe"]
+
+
+def test_an_oversized_upload_is_refused_before_it_is_written(api, tmp_path, monkeypatch):
+    from forge.config import get_settings
+    from forge.rag.walker import MAX_FILE_BYTES
+
+    drop = tmp_path / "uploads"
+    monkeypatch.setenv("UPLOAD_DIR", str(drop))
+    get_settings.cache_clear()
+
+    body = api.post(
+        "/v1/uploads",
+        files=[("files", ("huge.md", b"x" * (MAX_FILE_BYTES + 1), "text/markdown"))],
+    ).json()
+
+    assert body["stored"] == []
+    assert "exceeds" in body["refused"]["huge.md"]
+    assert not (drop / "huge.md").exists()

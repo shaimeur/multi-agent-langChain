@@ -153,6 +153,11 @@ class Settings(BaseSettings):
     # permission; this list is what keeps that true — the browser selects from a
     # server-side enumeration and never supplies a path that is used as given.
     repo_roots: str = ""
+    # Where the UI's drop zone writes. Deliberately *inside* the default repo root, so
+    # an uploaded document set becomes a selectable repository with no extra config —
+    # drop files, pick the folder, rebuild. Uploads are never written anywhere else:
+    # the route takes the basename only, so a filename cannot steer the destination.
+    upload_dir: Path = PROJECT_ROOT / "data" / "uploads"
 
     # --- sandbox (cahier 8.3) -------------------------------------------
     # These caps are quoted verbatim on the security slide and asserted in

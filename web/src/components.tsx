@@ -33,6 +33,43 @@ const short = (id: string) => (id.length > 14 ? `${id.slice(0, 14)}…` : id)
 
 // --- Sidebar ---------------------------------------------------------------
 
+function DropZone({ busy, onFiles }: { busy: boolean; onFiles: (f: FileList) => void }) {
+  const [over, setOver] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault()
+        setOver(true)
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setOver(false)
+        if (!busy && e.dataTransfer.files.length) onFiles(e.dataTransfer.files)
+      }}
+      onClick={() => !busy && input.current?.click()}
+      className={`mx-3 mb-3 cursor-pointer rounded-md border border-dashed px-3 py-3 text-center text-xs transition ${
+        over
+          ? 'border-cyan-500 bg-cyan-950/30 text-cyan-200'
+          : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'
+      } ${busy ? 'opacity-50' : ''}`}
+      title="PDF, Markdown, Python, config. They land in the upload folder — then pick it above and rebuild."
+    >
+      <input
+        ref={input}
+        type="file"
+        multiple
+        hidden
+        accept=".pdf,.md,.rst,.py,.pyi,.toml,.cfg,.ini,.yaml,.yml,.json"
+        onChange={(e) => e.target.files?.length && onFiles(e.target.files)}
+      />
+      ⇪ Drop documents
+      <div className="mt-0.5 text-[10px] text-slate-600">pdf · md · py · config</div>
+    </div>
+  )
+}
+
 export function Sidebar(props: {
   sessions: SessionInfo[]
   activeId: string | null
@@ -43,6 +80,7 @@ export function Sidebar(props: {
   onDelete: (id: string) => void
   onIndex: () => void
   onPickRepo: (path: string) => void
+  onUpload: (files: FileList) => void
 }) {
   const current = props.repos.find((r) => r.is_current)
   return (
@@ -86,6 +124,11 @@ export function Sidebar(props: {
           </select>
         </div>
       )}
+
+      {/* D15c — drop documents in. They land in the upload folder, which sits inside
+          the default repo root, so it shows up in the picker above as a selectable
+          repository. Dropping does not index: pick the folder, then rebuild. */}
+      <DropZone busy={props.busy} onFiles={props.onUpload} />
 
       {/* §15.6 opens on `forge index`. The demo runs pre-warmed, but the DoD is "no
           terminal", so the browser has to be able to kick one off. 202 — fire and forget.

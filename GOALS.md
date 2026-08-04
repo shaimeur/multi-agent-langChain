@@ -362,13 +362,26 @@ a requirement being met. Say so if a jury asks.
       allowlist keeps the invariant: the browser *selects*, it never *supplies*. Server-side
       re-enumeration on every request, `realpath` containment, and a red-team case for the
       traversal attempt
+- [x] **Tier 1b — PDF ingestion and a drop zone (D15c).** `.pdf` joins `walker.LANGUAGES`;
+      text is extracted per page (pypdf) and chunked as prose, so a citation lands on a page.
+      `POST /v1/uploads` (multipart) writes into `UPLOAD_DIR`, which sits inside the default
+      repo root — so dropped documents become a **selectable repository**, not a second
+      corpus. **This is not §6.1's cut `docs` corpus**: no URL fetching, no second
+      collection, no separate pipeline. Uploads take the *basename only*, so a filename
+      cannot steer the destination; a non-indexable extension and an oversize file are
+      refused with a reason, and both outcomes are §8.5 events
 - [ ] ~~**Tier 3 — evals from the UI**~~ — **not taken.** Routes to run each harness, a
       golden-set editor and a seeded-bug editor. Argued against and deferred: the expensive
       part of retargeting is hand-verifying 42 golden pairs, which no UI removes, and the CLI
       is the right surface for an eval harness. Recorded so the decision is visible, not silent
 
 **DoD: the browser can point FORGE at a different allowlisted repository and rebuild its
-index, and a path outside the allowlist is refused and logged.**
+index, and a path outside the allowlist is refused and logged.** — **MET.** In the running
+container: switched to a second repo and back (both logged), `/etc` refused with 400, a PDF
+uploaded and the drop folder appeared in the picker, `../../etc/evil.md` stored as
+`evil.md` with nothing written outside. **One collection still means one corpus at a
+time** — indexing the uploads replaces the sqlparse index, so switch back and rebuild
+before the demo.
 
 ---
 

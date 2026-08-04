@@ -24,6 +24,11 @@ LANGUAGES: dict[str, str] = {
     ".yaml": "config",
     ".yml": "config",
     ".json": "config",
+    # Text is extracted per page and chunked as prose. The cahier cut a second
+    # *corpus* (§6.1's `docs` collection and `web_docs_search`, descope §8.1) — this
+    # is not that: no URL fetching, no second collection, no separate pipeline. A PDF
+    # sitting in a directory is just another file the existing walker can read.
+    ".pdf": "pdf",
 }
 
 # Directories that are never source, whatever the ignore files say.
@@ -71,6 +76,12 @@ SKIP_NAMES = frozenset(
 
 MAX_FILE_BYTES = 512_000
 """Past this a source file is generated, vendored, or a data blob."""
+
+MAX_PDF_BYTES = 20_000_000
+"""PDFs get their own cap. The source-file limit is a proxy for "this is generated,
+not written"; a PDF is a container format where a 5 MB file can hold twenty pages of
+prose, so the same number would reject ordinary documents. What is indexed is the
+*extracted text*, which the normal chunker then bounds anyway."""
 
 FORGEIGNORE = ".forgeignore"
 
@@ -162,12 +173,40 @@ def _is_indexable(rel_path: str) -> bool:
     return Path(rel_path).suffix.lower() in LANGUAGES
 
 
+def _read_pdf(path: Path) -> str | None:
+    """Extracted text, page by page, or None if there is none worth indexing.
+
+    Pages are separated by a marker rather than concatenated blindly, so the prose
+    chunker has a boundary to split on and a citation lands on a page a person can
+    actually turn to. A scanned PDF extracts to nothing — there is no OCR here — and
+    returning None is the honest outcome: an empty chunk in the index would answer
+    questions with silence rather than admitting the document was never readable.
+    """
+    try:
+        if path.stat().st_size > MAX_PDF_BYTES:
+            return None
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(path))
+        pages = []
+        for number, page in enumerate(reader.pages, start=1):
+            text = (page.extract_text() or "").strip()
+            if text:
+                pages.append(f"## page {number}\n\n{text}")
+    except Exception:  # noqa: BLE001 — an unparseable PDF is skipped, never fatal
+        return None
+    return "\n\n".join(pages) or None
+
+
 def _read_text(path: Path) -> str | None:
     """Decoded contents, or None when the file is binary or unreadable.
 
     A NUL byte is the pragmatic binary test: it cannot appear in valid UTF-8
     text and catches the compiled artefacts an extension allowlist misses.
     """
+    # A PDF *is* binary, so it has to be handled before the NUL-byte test rejects it.
+    if path.suffix.lower() == ".pdf":
+        return _read_pdf(path)
     try:
         if path.stat().st_size > MAX_FILE_BYTES:
             return None

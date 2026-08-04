@@ -198,6 +198,21 @@ export default function App() {
     }
   }
 
+  const upload = async (files: FileList) => {
+    try {
+      const r = await api.uploadFiles(files)
+      await refreshRepos()   // the drop folder may have just come into existence
+      const bad = Object.entries(r.refused)
+      const refused = bad.length ? ` Refused: ${bad.map(([n, why]) => `${n} (${why})`).join(', ')}.` : ''
+      setNotice(
+        `${r.stored.length} file(s) → ${r.upload_dir}, ${r.total_files} there now.` +
+          ` Select that folder above and rebuild to index them.${refused}`,
+      )
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
   const pickRepo = async (path: string) => {
     try {
       const r = await api.setTarget(path)
@@ -275,6 +290,7 @@ export default function App() {
         onIndex={() => void reindex()}
         repos={repos}
         onPickRepo={(p) => void pickRepo(p)}
+        onUpload={(f) => void upload(f)}
       />
 
       <main className="flex min-w-0 flex-1">

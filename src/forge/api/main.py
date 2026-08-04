@@ -22,7 +22,7 @@ import os
 from contextlib import suppress
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -40,6 +40,7 @@ from forge.rag import store
 from forge.rag.answer import answer_question
 from forge.rag.embed import build_embedder
 from forge.rag.retrieve import Filters, hybrid_search, is_identifier_query, load_encoder
+from forge.rag.walker import LANGUAGES, MAX_FILE_BYTES, MAX_PDF_BYTES
 
 app = FastAPI(
     title="FORGE",
@@ -434,6 +435,86 @@ def start_index(request: IndexRequest, background: BackgroundTasks) -> IndexAcce
 
     background.add_task(run_index)
     return IndexAccepted(status="accepted", path=target, incremental=request.incremental)
+
+
+# --- the drop zone (D15c) --------------------------------------------------
+
+
+class UploadResult(BaseModel):
+    stored: list[str]
+    refused: dict[str, str]
+    upload_dir: str
+    total_files: int
+    """Everything now in the drop folder, not just this batch."""
+
+
+@app.post("/v1/uploads", response_model=UploadResult, status_code=201, tags=["ops"])
+async def upload_documents(files: list[UploadFile]) -> UploadResult:
+    """Accept documents into the drop folder so they can be indexed.
+
+    Three things a file upload has to get right, and all three are refusals rather
+    than sanitisation, because silently repairing a hostile filename teaches nobody:
+
+    * **The name never steers the destination.** Only ``Path(name).name`` is used, so
+      ``../../.ssh/authorized_keys`` becomes ``authorized_keys`` and lands in the drop
+      folder like anything else. The destination is a constant from settings.
+    * **The extension must be one the walker can read**, or the file would sit there
+      looking indexed and contribute nothing.
+    * **Size is capped** before the bytes are written, not after.
+
+    This does not index anything. Uploading and indexing are separate on purpose — the
+    drop folder is a *repository* like any other, so you select it in the picker and
+    rebuild, and the same one-collection rule applies as everywhere else.
+    """
+    settings = get_settings()
+    log = get_log(settings)
+    target_dir = Path(settings.upload_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    stored: list[str] = []
+    refused: dict[str, str] = {}
+
+    for upload in files:
+        raw = upload.filename or "unnamed"
+        name = Path(raw).name  # basename only — the whole traversal defence
+        suffix = Path(name).suffix.lower()
+        if not name or name.startswith("."):
+            refused[raw] = "no usable filename"
+        elif suffix not in LANGUAGES:
+            refused[raw] = f"{suffix or 'no extension'} is not indexable"
+        else:
+            body = await upload.read()
+            cap = MAX_PDF_BYTES if suffix == ".pdf" else MAX_FILE_BYTES
+            if len(body) > cap:
+                refused[raw] = f"{len(body)} bytes exceeds the {cap} cap"
+            else:
+                (target_dir / name).write_bytes(body)
+                stored.append(name)
+
+        if raw in refused:
+            log.emit(
+                stage=GuardrailStage.POLICY,
+                rule="policy.upload_refused",
+                action=GuardrailAction.BLOCKED,
+                detail=refused[raw],
+                target=raw,
+            )
+        elif name != raw:
+            # Worth its own event: the client sent a path, not a name.
+            log.emit(
+                stage=GuardrailStage.POLICY,
+                rule="policy.upload_path_stripped",
+                action=GuardrailAction.REDACTED,
+                detail=f"stored as {name!r}",
+                target=raw,
+            )
+
+    return UploadResult(
+        stored=stored,
+        refused=refused,
+        upload_dir=str(target_dir),
+        total_files=sum(1 for p in target_dir.iterdir() if p.is_file()),
+    )
 
 
 # --- choosing the target repository (D15b, Tier 2) -------------------------

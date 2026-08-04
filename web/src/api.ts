@@ -186,6 +186,17 @@ export const listRepos = () => fetch(`${BASE}/v1/repos`).then(json<RepoOption[]>
 
 // The value sent back must be one the server itself listed — it re-enumerates and
 // compares, so this is a selection, never a path the client invents.
+// Drop zone. Multipart, not JSON: these are bytes, and base64 in a JSON body would
+// inflate a 20 MB PDF by a third for no benefit. Uploading does NOT index — the drop
+// folder is a repository like any other, so you pick it and rebuild.
+export const uploadFiles = (files: FileList | File[]) => {
+  const form = new FormData()
+  for (const f of Array.from(files)) form.append('files', f)
+  return fetch(`${BASE}/v1/uploads`, { method: 'POST', body: form }).then(
+    json<{ stored: string[]; refused: Record<string, string>; upload_dir: string; total_files: number }>,
+  )
+}
+
 export const setTarget = (path: string) =>
   fetch(`${BASE}/v1/target`, {
     method: 'POST',
