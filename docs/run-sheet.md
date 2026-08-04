@@ -16,10 +16,26 @@ scripts/stage_demo.sh warm
 
 # 3. The stack, the way the examiner will run it.
 docker compose up --build          # → http://localhost:8000
+
+# 4. THE TRAP. `stage_demo.sh warm` indexes the EMBEDDED store (data/qdrant) that the CLI
+#    uses. The container has its OWN Qdrant, in the `qdrant-storage` volume, and step 2
+#    does not touch it. On this machine that volume still held an index of FORGE's own
+#    source from an earlier session — so the browser demo cited src/forge/... instead of
+#    sqlparse. Force a FULL rebuild inside the container and check the count:
+curl -s -X POST localhost:8000/v1/index -H 'content-type: application/json' \
+     -d '{"path":"data/target","incremental":false}'
+sleep 120 && curl -s localhost:6333/collections/code | grep -o '"points_count":[0-9]*'
+#    Must be 617. Anything else and you are about to demo the wrong repository.
 ```
 
 If step 2 fails it tells you which of the two causes it is. Do not start recording until it
-prints `ready`.
+prints `ready` **and** step 4 says 617.
+
+> **Why the `Index repo` button will not save you.** It calls `/v1/index` with
+> `incremental: true`, and incremental means "index what `git diff` says changed". The
+> target repo's HEAD has not moved, so the diff is empty and the button is a silent no-op —
+> it returns `202 accepted` and does nothing. The clean-machine test cannot catch this
+> because it runs under a fresh compose project with empty volumes. Use the curl above.
 
 ---
 
